@@ -37,6 +37,22 @@ export interface Survey {
   questions: Question[];
 }
 
+export type QuestionDraft = Pick<Question, "type" | "prompt" | "options" | "scaleMin" | "scaleMax">;
+
+export interface QuestionProposal {
+  id: string;
+  draft: QuestionDraft;
+  status: "pending" | "approved";
+  createdAt: string;
+  voteCount: number;
+  voted: boolean;
+}
+
+export interface ProposalsPayload {
+  proposals: QuestionProposal[];
+  acceptingResponses: boolean;
+}
+
 /** Answer values: single -> optionId; multi -> optionId[]; scale -> number;
  *  free_text/word_cloud -> string; ranked_choice -> optionId[] (ordered); emoji -> optionId */
 export type AnswerValue = string | number | string[];

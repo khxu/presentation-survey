@@ -1,8 +1,14 @@
-import type { Answers, ResultsPayload, Survey } from "../../shared/types.ts";
+import type { Answers, ProposalsPayload, Question, QuestionDraft, ResultsPayload, Survey } from "../../shared/types.ts";
+
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
 
 async function j<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error((data as any).error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw new ApiError((data as any).error ?? `HTTP ${res.status}`, res.status);
   return data as T;
 }
 
@@ -30,13 +36,38 @@ export const api = {
   publicResults: (slug: string, groupBy: string | null) =>
     fetch(`/api/s/${slug}/results${groupBy ? `?groupBy=${groupBy}` : ""}`).then((r) => j<ResultsPayload>(r)),
 
+  proposals: (slug: string, signal?: AbortSignal) =>
+    fetch(`/api/s/${slug}/proposals`, { credentials: "same-origin", signal }).then((r) => j<ProposalsPayload>(r)),
+  propose: (slug: string, question: QuestionDraft) =>
+    fetch(`/api/s/${slug}/proposals`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
+    }).then((r) => j<{ ok: true }>(r)),
+  vote: (slug: string, proposalId: string, voted: boolean) =>
+    fetch(`/api/s/${slug}/proposals/${proposalId}/vote`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voted }),
+    }).then((r) => j<{ ok: true }>(r)),
+
   admin: {
     get: (key: string) => fetch(`/api/admin/${key}`).then((r) => j<{ survey: Survey; totalResponses: number }>(r)),
-    patch: (key: string, patch: Partial<Survey>) =>
+    patch: (key: string, patch: Partial<Survey> & { expectedQuestions?: Question[] }) =>
       fetch(`/api/admin/${key}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
+      }).then((r) => j<{ survey: Survey }>(r)),
+    proposals: (key: string, signal?: AbortSignal) =>
+      fetch(`/api/admin/${key}/proposals`, { signal }).then((r) => j<ProposalsPayload>(r)),
+    approveProposal: (key: string, proposalId: string, question: Question) =>
+      fetch(`/api/admin/${key}/proposals/${proposalId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
       }).then((r) => j<{ survey: Survey }>(r)),
     results: (key: string, groupBy: string | null, includeHidden = true) =>
       fetch(

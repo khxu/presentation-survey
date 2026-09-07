@@ -1,4 +1,5 @@
 import { sqlite } from "https://esm.town/v/std/sqlite/main.ts";
+import { proposalSchema } from "./proposal-sql.ts";
 
 export { sqlite };
 
@@ -30,6 +31,7 @@ export function ensureSchema() {
           UNIQUE (survey_id, sid)
         )`,
         `CREATE INDEX IF NOT EXISTS idx_responses_survey ON responses(survey_id)`,
+        ...proposalSchema,
       ]);
     })();
   }

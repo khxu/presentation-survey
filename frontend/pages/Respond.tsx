@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
 import type { Answers, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
 import { QuestionInput } from "../components/respond/QuestionInput.tsx";
+import { CommunityQuestions } from "../components/proposals/CommunityQuestions.tsx";
 
 export function Respond({ slug }: { slug: string }) {
   const [survey, setSurvey] = useState<Survey | null>(null);
@@ -11,6 +12,7 @@ export function Respond({ slug }: { slug: string }) {
   const [step, setStep] = useState(-1); // -1 = intro, n = question, len = done
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [completedQuestions, setCompletedQuestions] = useState<string[] | null>(null);
   const pollRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -55,6 +57,7 @@ export function Respond({ slug }: { slug: string }) {
         <h1 className="text-2xl font-bold mb-2">{survey.title}</h1>
         <p className="text-gray-600">This survey is closed to new responses.</p>
         {survey.resultsVisible && <ResultsLink slug={slug} />}
+        <CommunityQuestions slug={slug} acceptingResponses={false} />
       </Card>
     );
   }
@@ -70,25 +73,40 @@ export function Respond({ slug }: { slug: string }) {
             👋 Welcome back — this device already answered. You can review and update your answers.
           </div>
         )}
-        <button onClick={() => setStep(0)} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-4 rounded-xl text-lg">
+        <button disabled={total === 0} onClick={() => setStep(0)} className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-semibold py-4 rounded-xl text-lg">
           {returning ? "Review my answers" : "Start →"}
         </button>
         {total === 0 && <p className="text-xs text-gray-400 mt-3">The presenter hasn't added questions yet — hang tight, this page refreshes automatically.</p>}
         {survey.resultsVisible && <ResultsLink slug={slug} />}
+        <CommunityQuestions slug={slug} acceptingResponses={survey.acceptingResponses} />
       </Card>
     );
   }
 
-  if (step >= total) {
+  if (completedQuestions !== null || step >= total) {
+    const addedQuestions = completedQuestions === null ? [] : qs.filter((q) => !completedQuestions.includes(q.id));
     return (
       <Card>
         <div className="text-6xl mb-3">🎉</div>
         <h1 className="text-2xl font-bold mb-2">Thanks!</h1>
         <p className="text-gray-600 mb-4">Your answers are in{saving ? " (saving…)" : ""}.</p>
+        {error && <p role="alert" className="text-red-600 text-sm mb-3">{error}</p>}
+        {addedQuestions.length > 0 && survey.acceptingResponses && (
+          <button
+            onClick={() => {
+              setStep(qs.findIndex((q) => q.id === addedQuestions[0].id));
+              setCompletedQuestions(null);
+            }}
+            className="mb-4 bg-indigo-50 text-indigo-700 rounded-xl px-4 py-3 font-semibold"
+          >
+            {addedQuestions.length} new question{addedQuestions.length === 1 ? "" : "s"} added - answer now
+          </button>
+        )}
         {survey.resultsVisible
           ? <ResultsLink slug={slug} big />
           : <p className="text-sm text-gray-500">The presenter will reveal results shortly. Keep this tab open — the link will appear here.</p>}
-        <button onClick={() => setStep(0)} className="mt-6 text-sm text-indigo-600 underline">Edit my answers</button>
+        <button onClick={() => { setStep(0); setCompletedQuestions(null); }} className="mt-6 text-sm text-indigo-600 underline">Edit my answers</button>
+        <CommunityQuestions slug={slug} acceptingResponses={survey.acceptingResponses} />
       </Card>
     );
   }
@@ -107,6 +125,7 @@ export function Respond({ slug }: { slug: string }) {
 
   function next() {
     persist(answers);
+    if (step === total - 1) setCompletedQuestions(qs.map((q) => q.id));
     setStep(step + 1);
   }
 
