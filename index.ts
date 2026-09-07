@@ -1,5 +1,7 @@
 import { parseVal, serveImmutableFile } from "https://esm.town/v/std/utils/index.ts";
 import { Hono } from "npm:hono";
+import { bodyLimit } from "npm:hono/body-limit";
+import { HTTPException } from "npm:hono/http-exception";
 import { getCookie, setCookie } from "npm:hono/cookie";
 import QRCode from "npm:qrcode";
 import { buildResults } from "./backend/aggregate.ts";
@@ -17,6 +19,10 @@ import {
   upsertResponse,
 } from "./backend/surveys.ts";
 import { Root } from "./frontend/root.tsx";
+import { approveProposal, createProposal, listProposals, setProposalVote } from "./backend/proposals.ts";
+import { RequestError } from "./backend/errors.ts";
+import { QuestionValidationError } from "./shared/questions.ts";
+import type { Survey } from "./shared/types.ts";
 
 const app = new Hono();
 
@@ -44,6 +50,25 @@ function getOrSetSid(c: any): string {
 }
 
 // ---- Public API ----
+const proposalBodyLimit = bodyLimit({
+  maxSize: 16 * 1024,
+  onError: (c) => c.json({ error: "Question requests must be smaller than 16 KB." }, 413),
+});
+
+async function questionBody(req: Request): Promise<Record<string, unknown>> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new RequestError("Provide valid JSON.", 400);
+    throw error;
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new RequestError("Provide a JSON object.", 400);
+  }
+  return body as Record<string, unknown>;
+}
+
 app.post("/api/surveys", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const title = String(body.title ?? "").slice(0, 120);
@@ -69,6 +94,32 @@ app.post("/api/s/:slug/respond", async (c) => {
   const answers = sanitizeAnswers(survey, body.answers);
   await upsertResponse(survey.id, sid, answers);
   return c.json({ ok: true, answers });
+});
+
+app.get("/api/s/:slug/proposals", async (c) => {
+  const survey = await getSurveyBySlug(c.req.param("slug"));
+  if (!survey) return c.json({ error: "Not found" }, 404);
+  const proposals = await listProposals(survey.id, getOrSetSid(c));
+  return c.json({ proposals, acceptingResponses: survey.acceptingResponses });
+});
+
+app.post("/api/s/:slug/proposals", proposalBodyLimit, async (c) => {
+  const survey = await getSurveyBySlug(c.req.param("slug"));
+  if (!survey) return c.json({ error: "Not found" }, 404);
+  if (!survey.acceptingResponses) return c.json({ error: "This survey is closed." }, 403);
+  const body = await questionBody(c.req.raw);
+  await createProposal(survey.id, getOrSetSid(c), body.question);
+  return c.json({ ok: true }, 201);
+});
+
+app.put("/api/s/:slug/proposals/:proposalId/vote", proposalBodyLimit, async (c) => {
+  const survey = await getSurveyBySlug(c.req.param("slug"));
+  if (!survey) return c.json({ error: "Not found" }, 404);
+  if (!survey.acceptingResponses) return c.json({ error: "This survey is closed." }, 403);
+  const body = await questionBody(c.req.raw);
+  if (typeof body.voted !== "boolean") return c.json({ error: "voted must be a boolean." }, 400);
+  await setProposalVote(survey.id, c.req.param("proposalId"), getOrSetSid(c), body.voted);
+  return c.json({ ok: true });
 });
 
 app.get("/api/s/:slug/results", async (c) => {
@@ -112,9 +163,20 @@ admin.get("/", async (c) => {
 admin.patch("/", async (c) => {
   const survey = c.get("survey" as never) as any;
   const body = await c.req.json().catch(() => ({}));
-  await updateSurvey(survey.id, body);
-  const fresh = await getSurveyBySlug(survey.slug);
-  return c.json({ survey: fresh });
+  const fresh = await updateSurvey(survey.id, body);
+  return c.json({ survey: fresh ?? survey });
+});
+
+admin.get("/proposals", async (c) => {
+  const survey = c.get("survey" as never) as Survey;
+  return c.json({ proposals: await listProposals(survey.id), acceptingResponses: survey.acceptingResponses });
+});
+
+admin.post("/proposals/:proposalId/approve", proposalBodyLimit, async (c) => {
+  const survey = c.get("survey" as never) as Survey;
+  const body = await questionBody(c.req.raw);
+  await approveProposal(survey.id, c.req.param("proposalId"), body.question);
+  return c.json({ survey: await getSurveyBySlug(survey.slug) });
 });
 
 admin.get("/results", async (c) => {
@@ -165,6 +227,11 @@ admin.delete("/", async (c) => {
 
 app.route("/api/admin/:key", admin);
 
-app.onError((err) => Promise.reject(err));
+app.onError((err, c) => {
+  if (err instanceof RequestError) return c.json({ error: err.message }, err.status);
+  if (err instanceof QuestionValidationError) return c.json({ error: err.message }, 400);
+  if (err instanceof HTTPException) return err.getResponse();
+  throw err;
+});
 
 export default app.fetch;

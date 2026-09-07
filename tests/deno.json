@@ -1,0 +1,9 @@
+{
+  "extends": "../deno.json",
+  "compilerOptions": {
+    "types": ["npm:@types/node@24", "https://www.val.town/types/valtown.d.ts"]
+  },
+  "imports": {
+    "https://esm.town/v/std/sqlite/main.ts": "./sqlite.ts"
+  }
+}

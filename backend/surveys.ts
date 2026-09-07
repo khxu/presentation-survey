@@ -1,5 +1,6 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
 import { ensureSchema, randomId, sha256, sqlite } from "./db.ts";
+import { RequestError } from "./errors.ts";
 
 function rowToSurvey(r: Record<string, unknown>): Survey {
   return {
@@ -49,9 +50,10 @@ export interface SurveyPatch {
   acceptingResponses?: boolean;
   audienceFacets?: boolean;
   questions?: Question[];
+  expectedQuestions?: Question[];
 }
 
-export async function updateSurvey(id: string, patch: SurveyPatch): Promise<void> {
+export async function updateSurvey(id: string, patch: SurveyPatch): Promise<Survey | undefined> {
   await ensureSchema();
   const sets: string[] = [];
   const args: (string | number)[] = [];
@@ -63,17 +65,27 @@ export async function updateSurvey(id: string, patch: SurveyPatch): Promise<void
   }
   if (patch.audienceFacets !== undefined) sets.push("audience_facets = ?"), args.push(patch.audienceFacets ? 1 : 0);
   if (patch.questions !== undefined) {
+    if (!Array.isArray(patch.questions) || !Array.isArray(patch.expectedQuestions)) {
+      throw new RequestError("Reload the builder before saving questions.", 409);
+    }
     const qs = patch.questions.map((q, i) => ({ ...q, position: i }));
     sets.push("questions_json = ?"), args.push(JSON.stringify(qs));
   }
   if (!sets.length) return;
   args.push(id);
-  await sqlite.execute({ sql: `UPDATE surveys SET ${sets.join(", ")} WHERE id = ?`, args });
+  // Compare the last saved snapshot so an older builder cannot erase an approval.
+  const condition = patch.questions !== undefined ? " AND json(questions_json) = json(?)" : "";
+  if (patch.questions !== undefined) args.push(JSON.stringify(patch.expectedQuestions));
+  const result = await sqlite.execute({ sql: `UPDATE surveys SET ${sets.join(", ")} WHERE id = ?${condition} RETURNING *`, args });
+  if (!result.rowsAffected) throw new RequestError("Questions changed in another tab. Reload before saving.", 409);
+  return rowToSurvey(result.rows[0] as Record<string, unknown>);
 }
 
 export async function deleteSurvey(id: string): Promise<void> {
   await ensureSchema();
   await sqlite.batch([
+    { sql: `DELETE FROM proposal_votes WHERE proposal_id IN (SELECT id FROM question_proposals WHERE survey_id = ?)`, args: [id] },
+    { sql: `DELETE FROM question_proposals WHERE survey_id = ?`, args: [id] },
     { sql: `DELETE FROM responses WHERE survey_id = ?`, args: [id] },
     { sql: `DELETE FROM surveys WHERE id = ?`, args: [id] },
   ]);

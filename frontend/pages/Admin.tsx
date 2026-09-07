@@ -4,8 +4,9 @@ import type { Question, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
 import { newQuestion, QuestionEditor } from "../components/builder/QuestionEditor.tsx";
 import { ResultsView } from "../components/charts/ResultsView.tsx";
+import { ProposalReview } from "../components/proposals/ProposalReview.tsx";
 
-type Tab = "build" | "share" | "results";
+type Tab = "build" | "share" | "results" | "proposals";
 
 export function Admin({ adminKey }: { adminKey: string }) {
   const [survey, setSurvey] = useState<Survey | null>(null);
@@ -14,41 +15,95 @@ export function Admin({ adminKey }: { adminKey: string }) {
   const [tab, setTab] = useState<Tab>(location.search.includes("new=1") ? "share" : "build");
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
   const [copied, setCopied] = useState(false);
+  const [approving, setApproving] = useState(false);
   const saveTimer = useRef<number | null>(null);
+  const savedQuestions = useRef<Question[]>([]);
+  const pendingPatch = useRef<Partial<Survey>>({});
+  const inFlight = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
-    api.admin.get(adminKey).then((d) => (setSurvey(d.survey), setTotal(d.totalResponses))).catch((e) =>
+    api.admin.get(adminKey).then((d) => {
+      savedQuestions.current = d.survey.questions;
+      setSurvey(d.survey);
+      setTotal(d.totalResponses);
+    }).catch((e) =>
       setError(e.message)
     );
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
   }, [adminKey]);
 
-  // Debounced autosave of questions/title/description
+  // Merge debounced fields and serialize writes before publishing an approved question.
+  async function flush() {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    if (inFlight.current) return await inFlight.current;
+    const request = (async () => {
+      while (Object.keys(pendingPatch.current).length) {
+        const patch = pendingPatch.current;
+        pendingPatch.current = {};
+        try {
+          const { survey: fresh } = await api.admin.patch(adminKey, {
+            ...patch,
+            ...(patch.questions ? { expectedQuestions: savedQuestions.current } : {}),
+          });
+          if (patch.questions || !pendingPatch.current.questions) savedQuestions.current = fresh.questions;
+          setSurvey({ ...fresh, ...pendingPatch.current });
+        } catch (error) {
+          pendingPatch.current = { ...patch, ...pendingPatch.current };
+          throw error;
+        }
+      }
+    })();
+    inFlight.current = request;
+    try {
+      await request;
+      setSaving("saved");
+      setError(null);
+    } finally {
+      inFlight.current = null;
+    }
+  }
+
+  function saveError(error: unknown) {
+    setSaving("idle");
+    setError(error instanceof Error ? error.message : "Could not save changes.");
+  }
+
   function edit(patch: Partial<Survey>) {
-    if (!survey) return;
-    const next = { ...survey, ...patch };
-    setSurvey(next);
+    pendingPatch.current = { ...pendingPatch.current, ...patch };
+    setSurvey((current) => current ? { ...current, ...patch } : current);
     setSaving("saving");
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      try {
-        await api.admin.patch(adminKey, patch);
-        setSaving("saved");
-        setTimeout(() => setSaving("idle"), 1500);
-      } catch (e: any) {
-        setError(e.message);
-      }
+    saveTimer.current = setTimeout(() => {
+      void flush().catch(saveError);
     }, 600) as unknown as number;
   }
 
   // Immediate save for toggles
   async function toggle(patch: Partial<Survey>) {
-    if (!survey) return;
-    setSurvey({ ...survey, ...patch });
-    const { survey: fresh } = await api.admin.patch(adminKey, patch);
-    setSurvey(fresh);
+    edit(patch);
+    await flush().catch(saveError);
   }
 
-  if (error) {
+  async function approve(proposalId: string, question: Question) {
+    setApproving(true);
+    try {
+      try {
+        await flush();
+      } catch (error) {
+        saveError(error);
+        throw error;
+      }
+      const { survey: fresh } = await api.admin.approveProposal(adminKey, proposalId, question);
+      savedQuestions.current = fresh.questions;
+      setSurvey(fresh);
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  if (error && !survey) {
     return (
       <div className="max-w-md mx-auto mt-24 text-center bg-white rounded-2xl shadow p-8">
         <div className="text-4xl mb-2">🔒</div>
@@ -75,7 +130,16 @@ export function Admin({ adminKey }: { adminKey: string }) {
   const setQuestions = (qs: Question[]) => edit({ questions: qs });
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <fieldset disabled={approving} className="min-w-0 max-w-4xl mx-auto px-4 py-8">
+      {error && (
+        <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+          <p>{error} Your unsaved edits are still shown.</p>
+          <div className="flex flex-wrap gap-4 mt-2">
+            <button onClick={() => void flush().catch(saveError)} className="underline">Retry save</button>
+            <button onClick={() => location.reload()} className="underline">Reload saved version (discard local edits)</button>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <input
@@ -120,7 +184,7 @@ export function Admin({ adminKey }: { adminKey: string }) {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 border-b">
-        {(["build", "share", "results"] as Tab[]).map((t) => (
+        {(["build", "proposals", "share", "results"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -128,7 +192,7 @@ export function Admin({ adminKey }: { adminKey: string }) {
               tab === t ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-800"
             }`}
           >
-            {t === "build" ? "✏️ Build" : t === "share" ? "📱 Share" : "📊 Results"}
+            {t === "build" ? "✏️ Build" : t === "share" ? "📱 Share" : t === "proposals" ? "Proposals" : "📊 Results"}
           </button>
         ))}
       </div>
@@ -229,7 +293,8 @@ export function Admin({ adminKey }: { adminKey: string }) {
           projectorUrl={resultsUrl}
         />
       )}
-    </div>
+      {tab === "proposals" && <ProposalReview adminKey={adminKey} onApprove={approve} />}
+    </fieldset>
   );
 }
 

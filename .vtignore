@@ -6,3 +6,5 @@ node_modules
 vendor
 .github
 .gitignore
+**/*_test.ts
+tests

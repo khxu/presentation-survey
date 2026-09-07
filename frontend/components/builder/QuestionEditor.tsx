@@ -1,35 +1,19 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
-import { DEFAULT_EMOJIS, hasOptions, QUESTION_TYPE_LABELS } from "../../../shared/types.ts";
+import { hasOptions, QUESTION_TYPE_LABELS } from "../../../shared/types.ts";
 import type { Question, QuestionType } from "../../../shared/types.ts";
 import { uid } from "../../lib/api.ts";
+import { newQuestion, QUESTION_LIMITS } from "../../../shared/questions.ts";
+
+export { newQuestion } from "../../../shared/questions.ts";
 
 interface Props {
   q: Question;
-  index: number;
-  total: number;
+  index?: number;
+  total?: number;
   onChange: (q: Question) => void;
-  onMove: (dir: -1 | 1) => void;
-  onDelete: () => void;
-}
-
-export function newQuestion(type: QuestionType = "single_choice"): Question {
-  const base: Question = {
-    id: uid(),
-    position: 0,
-    type,
-    prompt: "",
-    options: [],
-    isDemographic: false,
-    required: false,
-    hidden: false,
-  };
-  if (hasOptions(type)) {
-    base.options = type === "emoji_reaction"
-      ? DEFAULT_EMOJIS.map((e) => ({ id: uid(), label: e }))
-      : [{ id: uid(), label: "" }, { id: uid(), label: "" }];
-  }
-  if (type === "scale") base.scaleMin = 1, base.scaleMax = 5;
-  return base;
+  onMove?: (dir: -1 | 1) => void;
+  onDelete?: () => void;
+  participant?: boolean;
 }
 
 const Toggle = ({ label, checked, onChange, hint }: any) => (
@@ -39,7 +23,7 @@ const Toggle = ({ label, checked, onChange, hint }: any) => (
   </label>
 );
 
-export function QuestionEditor({ q, index, total, onChange, onMove, onDelete }: Props) {
+export function QuestionEditor({ q, index = 0, total = 1, onChange, onMove, onDelete, participant = false }: Props) {
   const set = (patch: Partial<Question>) => onChange({ ...q, ...patch });
 
   function changeType(type: QuestionType) {
@@ -56,21 +40,22 @@ export function QuestionEditor({ q, index, total, onChange, onMove, onDelete }: 
   return (
     <div className={`bg-white rounded-xl shadow p-4 border-l-4 ${q.isDemographic ? "border-amber-400" : "border-indigo-400"}`}>
       <div className="flex items-start gap-3">
-        <div className="flex flex-col gap-1 text-gray-400">
+        {onMove && <div className="flex flex-col gap-1 text-gray-400">
           <button onClick={() => onMove(-1)} disabled={index === 0} className="hover:text-gray-700 disabled:opacity-20">▲</button>
           <span className="text-xs text-center font-mono">{index + 1}</span>
           <button onClick={() => onMove(1)} disabled={index === total - 1} className="hover:text-gray-700 disabled:opacity-20">▼</button>
-        </div>
+        </div>}
         <div className="flex-1 space-y-3">
           <div className="flex gap-2 flex-wrap">
             <select
               value={q.type}
+              aria-label="Question type"
               onChange={(e: any) => changeType(e.target.value)}
               className="border rounded-lg px-2 py-1.5 text-sm bg-gray-50"
             >
               {Object.entries(QUESTION_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
-            <div className="flex gap-3 items-center ml-auto">
+            {!participant && <div className="flex gap-3 flex-wrap items-center ml-auto">
               <Toggle label="Required" checked={q.required} onChange={(v: boolean) => set({ required: v })} />
               {canFacet && (
                 <Toggle
@@ -81,12 +66,14 @@ export function QuestionEditor({ q, index, total, onChange, onMove, onDelete }: 
                 />
               )}
               <Toggle label="Hide results" hint="Never show this question's results to the audience" checked={q.hidden} onChange={(v: boolean) => set({ hidden: v })} />
-              <button onClick={onDelete} className="text-red-500 hover:text-red-700 text-sm">🗑</button>
-            </div>
+              {onDelete && <button onClick={onDelete} className="text-red-500 hover:text-red-700 text-sm">🗑</button>}
+            </div>}
           </div>
 
           <input
             value={q.prompt}
+            aria-label="Question prompt"
+            maxLength={QUESTION_LIMITS.prompt}
             onChange={(e: any) => set({ prompt: e.target.value })}
             placeholder="Question prompt…"
             className="w-full border-b-2 border-gray-200 focus:border-indigo-400 focus:outline-none py-1 text-lg font-medium"
@@ -99,6 +86,8 @@ export function QuestionEditor({ q, index, total, onChange, onMove, onDelete }: 
                   <span className="text-gray-400 text-sm w-5 text-right">{q.type === "ranked_choice" ? "≡" : i + 1}</span>
                   <input
                     value={o.label}
+                    aria-label={`Option ${i + 1}`}
+                    maxLength={QUESTION_LIMITS.optionLabel}
                     onChange={(e: any) =>
                       set({ options: q.options.map((x) => x.id === o.id ? { ...x, label: e.target.value } : x) })}
                     placeholder={q.type === "emoji_reaction" ? "emoji" : `Option ${i + 1}`}
@@ -114,6 +103,7 @@ export function QuestionEditor({ q, index, total, onChange, onMove, onDelete }: 
               ))}
               <button
                 onClick={() => set({ options: [...q.options, { id: uid(), label: "" }] })}
+                disabled={q.options.length >= QUESTION_LIMITS.options}
                 className="text-sm text-indigo-600 hover:underline ml-7"
               >
                 + add option
