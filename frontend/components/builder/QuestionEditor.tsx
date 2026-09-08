@@ -14,6 +14,9 @@ interface Props {
   onMove?: (dir: -1 | 1) => void;
   onDelete?: () => void;
   participant?: boolean;
+  published?: boolean;
+  releasing?: boolean;
+  onReleaseChange?: (released: boolean) => void;
 }
 
 const Toggle = ({ label, checked, onChange, hint }: any) => (
@@ -23,12 +26,23 @@ const Toggle = ({ label, checked, onChange, hint }: any) => (
   </label>
 );
 
-export function QuestionEditor({ q, index = 0, total = 1, onChange, onMove, onDelete, participant = false }: Props) {
+export function QuestionEditor({
+  q,
+  index = 0,
+  total = 1,
+  onChange,
+  onMove,
+  onDelete,
+  participant = false,
+  published = false,
+  releasing = false,
+  onReleaseChange,
+}: Props) {
   const set = (patch: Partial<Question>) => onChange({ ...q, ...patch });
 
   function changeType(type: QuestionType) {
     const fresh = newQuestion(type);
-    onChange({ ...fresh, id: q.id, prompt: q.prompt, isDemographic: q.isDemographic, required: q.required, hidden: q.hidden,
+    onChange({ ...fresh, id: q.id, prompt: q.prompt, isDemographic: q.isDemographic, required: q.required, released: q.released, hidden: q.hidden,
       options: hasOptions(type) && hasOptions(q.type) && q.type !== "emoji_reaction" && type !== "emoji_reaction"
         ? q.options
         : fresh.options });
@@ -46,6 +60,31 @@ export function QuestionEditor({ q, index = 0, total = 1, onChange, onMove, onDe
           <button onClick={() => onMove(1)} disabled={index === total - 1} className="hover:text-gray-700 disabled:opacity-20">▼</button>
         </div>}
         <div className="flex-1 space-y-3">
+          {!participant && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span
+                className={`rounded-full px-2.5 py-1 font-semibold ${
+                  published && q.released ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"
+                }`}
+              >
+                {published ? (q.released ? "Released" : "On deck") : "On deck after save"}
+              </span>
+              {published && onReleaseChange && (
+                <button
+                  type="button"
+                  disabled={releasing}
+                  onClick={() => onReleaseChange(!q.released)}
+                  className={`rounded-lg px-3 py-1 font-semibold disabled:opacity-50 ${
+                    q.released
+                      ? "border border-amber-300 text-amber-700 hover:bg-amber-50"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700"
+                  }`}
+                >
+                  {releasing ? "Updating..." : q.released ? "Move on deck" : "Release to audience"}
+                </button>
+              )}
+            </div>
+          )}
           <div className="flex gap-2 flex-wrap">
             <select
               value={q.type}

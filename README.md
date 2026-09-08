@@ -7,9 +7,9 @@ Live polling for talks. Show a QR code, let the room answer on their phones with
 ## How a talk goes
 
 1. **Create** — hit the homepage, name your survey. You get a **secret admin link** (bookmark it — it's the only way back).
-2. **Build** — add and edit questions as a private draft, then click **Save questions** to publish them to respondents. Mark ones like *"What's your profession?"* as **Demographic** so you can group everything else by them later.
+2. **Build** — add and edit questions as a private draft, then click **Save questions** to put new questions **on deck**. Mark ones like *"What's your profession?"* as **Demographic** so you can group everything else by them later.
 3. **Share** — put the fullscreen **join slide** (`/s/<slug>/present`) on the projector. It shows a big QR code + short URL.
-4. **Collect** — the audience answers one question per screen. Each phone gets a cookie so answers are one-per-device and editable; no accounts.
+4. **Release and collect** — click **Release to audience** on each saved question when you reach it in the talk. Audience pages poll for newly released questions and present them one per screen. Each phone gets a cookie so answers are one-per-device and editable; no accounts.
 5. **Reveal** — flip **Show results to audience**. Open `/s/<slug>/results` on the projector; it live-updates every 3s. Use **Group by** to split every chart by a demographic question, or click a group chip to isolate it.
 6. **Co-create** — participants suggest complete questions and upvote others from the intro or thank-you screen. In the admin **Proposals** tab, review a draft, edit it, then approve it to append a live question. Finished participants see an invitation to answer newly added questions rather than being moved away from the community queue.
 
@@ -17,7 +17,7 @@ Live polling for talks. Show a QR code, let the room answer on their phones with
 
 Participants can propose any supported question type, including options or scale bounds. Pending proposals are public, sorted by upvotes (oldest first on ties), and refresh every 5 seconds while the page is visible. Each device can toggle one upvote per proposal; submitting a proposal does not automatically vote for it. Proposals do not require answering the survey first, and participants may upvote their own ideas.
 
-The presenter sets required, demographic, and result-visibility flags during review. Approval is manual regardless of vote count, immediately appends the edited question, and removes its proposal from the pending queue. Votes are not survey answers. There are no comments, participant edits, rejection actions, or automatic approvals.
+The presenter sets required, demographic, and result-visibility flags during review. Approval is manual regardless of vote count, appends the edited question **on deck**, and removes its proposal from the pending queue. The presenter releases it separately when ready. Votes are not survey answers. There are no comments, participant edits, rejection actions, or automatic approvals.
 
 Closing **Accepting responses** also closes proposals and voting, but leaves pending ideas readable. Admins may still approve while closed; participants can answer those questions when the survey reopens. Clearing responses keeps proposals and votes; deleting the survey removes them.
 
@@ -36,7 +36,8 @@ Proposal prompts are limited to 500 characters. Choice questions require 2–20 
 
 ## Admin controls
 
-- **Save questions** — publish question additions, edits, deletions, and reordering after reviewing the draft; respondents continue seeing the last saved version until then
+- **Save questions** — persist question additions, edits, deletions, and reordering after reviewing the draft; newly saved questions remain on deck
+- **Release to audience / Move on deck** (per question) — immediately control whether a saved question can be seen and answered without publishing other unsaved edits; moving a question back on deck preserves answers already collected
 - **Accepting responses** — close the survey when you move on
 - **Show results to audience** — survey-wide reveal toggle
 - **Hide results** (per question) — keeps a question out of the audience view even when results are on
@@ -67,7 +68,9 @@ graph LR
 
 **Security model:** the admin key is a 28-char random token stored only as a SHA-256 hash. Respondents are identified by an `HttpOnly` cookie; clearing it or switching devices allows a second response or another proposal vote (acceptable trade-off for a login-free live poll — a "welcome back" banner nudges returning devices to edit instead). Public proposal payloads never expose device identifiers. Votes are unique per device and proposal, not per verified person; this is not strong abuse prevention.
 
-Approval claims the pending proposal and appends its question in a single SQLite write transaction, so **Approve and add question** remains an immediate publish action. Regular builder edits stay local until **Save questions** is clicked. Saves compare their last published question snapshot to prevent stale tabs from overwriting an approval; conflicts retain local edits and offer a reload rather than silently losing questions.
+Approval claims the pending proposal and appends its question on deck in a single SQLite write transaction. Regular builder edits stay local until **Save questions** is clicked. Release actions update only the persisted release flag, so they never publish unrelated draft edits. Saves compare their last persisted question snapshot to prevent stale tabs from overwriting an approval or release; conflicts retain local edits and offer a reload rather than silently losing questions.
+
+Questions saved before progressive release was introduced are treated as released, preserving existing survey behavior. Public survey and results APIs omit on-deck questions, and crafted response requests cannot answer them. Admin results and CSV exports retain the full question set. If a released question is moved back on deck, its stored answers remain available if it is released again.
 
 ## Files
 
@@ -90,6 +93,7 @@ frontend/
   pages/Home.tsx               create a survey
   pages/Admin.tsx              build · share · results tabs
   pages/Respond.tsx            one-question-per-screen flow
+  lib/respondFlow.ts           active-question reconciliation across live releases
   pages/Results.tsx            public live results
   pages/Present.tsx            fullscreen QR join slide
   components/builder/          QuestionEditor

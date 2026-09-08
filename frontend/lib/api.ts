@@ -61,6 +61,12 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       }).then((r) => j<{ survey: Survey }>(r)),
+    setQuestionReleased: (key: string, questionId: string, released: boolean) =>
+      fetch(`/api/admin/${key}/questions/${questionId}/release`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ released }),
+      }).then((r) => j<{ survey: Survey }>(r)),
     proposals: (key: string, signal?: AbortSignal) =>
       fetch(`/api/admin/${key}/proposals`, { signal }).then((r) => j<ProposalsPayload>(r)),
     approveProposal: (key: string, proposalId: string, question: Question) =>

@@ -22,6 +22,7 @@ export interface Question {
   scaleMax?: number;
   isDemographic: boolean;
   required: boolean;
+  released: boolean; // available to respondents and eligible for public results
   hidden: boolean; // per-question hide override on results
 }
 

@@ -14,7 +14,11 @@ import {
   getResponse,
   getSurveyByAdminKey,
   getSurveyBySlug,
+  filterAnswers,
+  mergeReleasedAnswers,
+  publicSurvey,
   sanitizeAnswers,
+  setQuestionReleased,
   updateSurvey,
   upsertResponse,
 } from "./backend/surveys.ts";
@@ -82,7 +86,8 @@ app.get("/api/s/:slug", async (c) => {
   if (!survey) return c.json({ error: "Not found" }, 404);
   const sid = getOrSetSid(c);
   const existing = await getResponse(survey.id, sid);
-  return c.json({ survey, existing });
+  const visibleSurvey = publicSurvey(survey);
+  return c.json({ survey: visibleSurvey, existing: filterAnswers(existing, visibleSurvey.questions) });
 });
 
 app.post("/api/s/:slug/respond", async (c) => {
@@ -91,8 +96,10 @@ app.post("/api/s/:slug/respond", async (c) => {
   if (!survey.acceptingResponses) return c.json({ error: "This survey is closed." }, 403);
   const sid = getOrSetSid(c);
   const body = await c.req.json().catch(() => ({}));
-  const answers = sanitizeAnswers(survey, body.answers);
-  await upsertResponse(survey.id, sid, answers);
+  const visibleSurvey = publicSurvey(survey);
+  const answers = sanitizeAnswers(visibleSurvey, body.answers);
+  const existing = await getResponse(survey.id, sid);
+  await upsertResponse(survey.id, sid, mergeReleasedAnswers(existing, visibleSurvey.questions, answers));
   return c.json({ ok: true, answers });
 });
 
@@ -126,14 +133,19 @@ app.get("/api/s/:slug/results", async (c) => {
   const survey = await getSurveyBySlug(c.req.param("slug"));
   if (!survey) return c.json({ error: "Not found" }, 404);
   if (!survey.resultsVisible) return c.json({ error: "Results are not visible yet." }, 403);
-  const groupBy = survey.audienceFacets ? c.req.query("groupBy") || null : null;
+  const visibleSurvey = publicSurvey(survey);
+  const requestedGroup = visibleSurvey.audienceFacets ? c.req.query("groupBy") || null : null;
+  const groupBy = requestedGroup &&
+      visibleSurvey.questions.some((question) => question.id === requestedGroup && question.isDemographic)
+    ? requestedGroup
+    : null;
   const responses = await getAllResponses(survey.id);
-  const visible = survey.questions.filter((q) => !q.hidden);
+  const visible = visibleSurvey.questions.filter((q) => !q.hidden);
   return c.json({
-    survey,
+    survey: visibleSurvey,
     totalResponses: responses.length,
     groupBy,
-    groups: buildResults(survey, responses, groupBy, visible),
+    groups: buildResults(visibleSurvey, responses, groupBy, visible),
   });
 });
 
@@ -165,6 +177,16 @@ admin.patch("/", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const fresh = await updateSurvey(survey.id, body);
   return c.json({ survey: fresh ?? survey });
+});
+
+admin.patch("/questions/:questionId/release", async (c) => {
+  const survey = c.get("survey" as never) as Survey;
+  const body = await questionBody(c.req.raw);
+  if (typeof body.released !== "boolean") {
+    throw new RequestError("released must be a boolean.", 400);
+  }
+  const fresh = await setQuestionReleased(survey.id, c.req.param("questionId"), body.released);
+  return c.json({ survey: fresh });
 });
 
 admin.get("/proposals", async (c) => {

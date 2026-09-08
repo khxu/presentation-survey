@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
 import type { Question, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
-import { mergePublishedQuestion, questionsEqual } from "../lib/questionDraft.ts";
+import { mergePublishedQuestion, mergePublishedQuestionStates, questionsEqual } from "../lib/questionDraft.ts";
 import { newQuestion, QuestionEditor } from "../components/builder/QuestionEditor.tsx";
 import { ResultsView } from "../components/charts/ResultsView.tsx";
 import { ProposalReview } from "../components/proposals/ProposalReview.tsx";
@@ -21,6 +21,7 @@ export function Admin({ adminKey }: { adminKey: string }) {
   const [questionError, setQuestionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [releasingQuestionId, setReleasingQuestionId] = useState<string | null>(null);
   const saveTimer = useRef<number | null>(null);
   const pendingPatch = useRef<Partial<Survey>>({});
   const inFlight = useRef<Promise<void> | null>(null);
@@ -149,6 +150,23 @@ export function Admin({ adminKey }: { adminKey: string }) {
     }
   }
 
+  async function setQuestionReleased(questionId: string, released: boolean) {
+    setReleasingQuestionId(questionId);
+    setQuestionError(null);
+    try {
+      await flush();
+      const previousPublished = savedQuestions;
+      const { survey: fresh } = await api.admin.setQuestionReleased(adminKey, questionId, released);
+      setSavedQuestions(fresh.questions);
+      setDraftQuestions((draft) => mergePublishedQuestionStates(draft, previousPublished, fresh.questions));
+      setSurvey(fresh);
+    } catch (error) {
+      setQuestionError(error instanceof Error ? error.message : "Could not update question release.");
+    } finally {
+      setReleasingQuestionId(null);
+    }
+  }
+
   if (error && !survey) {
     return (
       <div className="max-w-md mx-auto mt-24 text-center bg-white rounded-2xl shadow p-8">
@@ -265,7 +283,7 @@ export function Admin({ adminKey }: { adminKey: string }) {
                 {questionsDirty ? "Unsaved question changes" : "Questions are saved"}
               </p>
               <p className="text-xs text-gray-600 mt-0.5">
-                Respondents see only the last saved version of the question list.
+                Saving puts new questions on deck. Release each saved question when the audience should receive it.
               </p>
             </div>
             <button
@@ -300,6 +318,9 @@ export function Admin({ adminKey }: { adminKey: string }) {
               q={q}
               index={i}
               total={questions.length}
+              published={savedQuestions.some((question) => question.id === q.id)}
+              releasing={releasingQuestionId === q.id}
+              onReleaseChange={(released) => void setQuestionReleased(q.id, released)}
               onChange={(nq) => setQuestions(questions.map((x) => x.id === q.id ? nq : x))}
               onDelete={() => setQuestions(questions.filter((x) => x.id !== q.id))}
               onMove={(dir) => {
