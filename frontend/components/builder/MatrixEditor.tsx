@@ -9,7 +9,8 @@ import {
 } from "../../../shared/questions.ts";
 import { uid } from "../../lib/api.ts";
 import {
-  MatrixCellReferences,
+  MatrixCellMarkers,
+  MatrixReferenceLegend,
   matrixReferenceText,
 } from "../MatrixCellReferences.tsx";
 
@@ -138,10 +139,11 @@ export function MatrixEditor({ q, onChange }: Props) {
                       <span className="absolute right-1 top-1 rounded-full bg-indigo-600 px-1 text-[9px] text-white">
                         {cellReferences.length}
                       </span>
-                      <MatrixCellReferences
-                        references={cellReferences}
+                      <MatrixCellMarkers
+                        references={references}
+                        cellReferences={cellReferences}
                         size={size}
-                        className="pr-5"
+                        className="absolute inset-2 pr-4"
                       />
                     </>
                   )}
@@ -154,6 +156,11 @@ export function MatrixEditor({ q, onChange }: Props) {
             <span className="text-center">{labels.bottom || "Bottom"}</span>
             <span className="text-right">{labels.right || "Right"}</span>
           </div>
+          <MatrixReferenceLegend
+            references={references}
+            size={size}
+            className="mt-3"
+          />
         </div>
       </div>
 

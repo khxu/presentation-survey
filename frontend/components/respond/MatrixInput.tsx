@@ -2,7 +2,8 @@
 import type { MatrixAnswer, Question } from "../../../shared/types.ts";
 import { isMatrixAnswer, matrixCellKey } from "../../../shared/questions.ts";
 import {
-  MatrixCellReferences,
+  MatrixCellMarkers,
+  MatrixReferenceLegend,
   matrixReferenceText,
 } from "../MatrixCellReferences.tsx";
 
@@ -64,12 +65,11 @@ export function MatrixInput({ q, value, onChange }: Props) {
                 }`}
               >
                 {cellReferences.length > 0 && (
-                  <MatrixCellReferences
-                    references={cellReferences}
+                  <MatrixCellMarkers
+                    references={references}
+                    cellReferences={cellReferences}
                     size={size}
-                    className={`text-[9px] leading-tight sm:text-xs ${
-                      on ? "text-white" : "text-gray-600"
-                    } ${on ? "pr-5" : ""}`}
+                    className={`absolute inset-2 ${on ? "pr-4" : ""}`}
                   />
                 )}
                 {on && (
@@ -86,6 +86,11 @@ export function MatrixInput({ q, value, onChange }: Props) {
           <span className="text-center">{labels.bottom}</span>
           <span className="text-right">{labels.right}</span>
         </div>
+        <MatrixReferenceLegend
+          references={references}
+          size={size}
+          className="mt-3"
+        />
       </div>
 
       {selected && (
@@ -96,24 +101,6 @@ export function MatrixInput({ q, value, onChange }: Props) {
           Selected column {selected.column + 1} of {size}, row{" "}
           {selected.row + 1} of {size} from top.
         </p>
-      )}
-
-      {references.length > 0 && (
-        <div className="rounded-xl border border-gray-200 bg-white p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Reference positions
-          </p>
-          <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
-            {references.map((reference) => (
-              <div key={reference.id} className="flex gap-2">
-                <span className="shrink-0 font-mono text-xs text-indigo-600">
-                  C{reference.column + 1}/R{reference.row + 1}
-                </span>
-                <span className="break-words">{reference.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   );
