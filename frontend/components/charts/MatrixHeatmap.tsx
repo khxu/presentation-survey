@@ -2,7 +2,8 @@
 import type { FacetGroup, Question } from "../../../shared/types.ts";
 import { matrixCellKey } from "../../../shared/questions.ts";
 import {
-  MatrixCellReferences,
+  MatrixCellMarkers,
+  MatrixReferenceLegend,
   matrixReferenceText,
 } from "../MatrixCellReferences.tsx";
 import { PALETTE } from "./Charts.tsx";
@@ -55,6 +56,7 @@ function GroupHeatmap(
   const counts = aggregate?.matrixCounts ?? {};
   const responseCount = aggregate?.responseCount ?? 0;
   const max = Math.max(1, ...Object.values(counts));
+  const countPadding = size === 2 ? "pb-12" : size === 4 ? "pb-8" : "pb-4";
 
   return (
     <div className="mx-auto max-w-xl">
@@ -94,7 +96,9 @@ function GroupHeatmap(
               }}
             >
               <div className="flex h-full min-h-0 flex-col text-center">
-                <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+                <div
+                  className={`flex min-h-0 flex-1 flex-col items-center justify-center ${countPadding}`}
+                >
                   <span
                     className={`font-black leading-none ${
                       size === 6 ? "text-sm sm:text-lg" : "text-2xl sm:text-3xl"
@@ -106,10 +110,11 @@ function GroupHeatmap(
                     {percent}%
                   </span>
                 </div>
-                <MatrixCellReferences
-                  references={cellReferences}
+                <MatrixCellMarkers
+                  references={references}
+                  cellReferences={cellReferences}
                   size={size}
-                  className="mt-1 shrink-0 text-[8px] leading-tight text-gray-800 sm:text-[10px]"
+                  className="absolute inset-x-1 bottom-1"
                 />
               </div>
             </div>
@@ -127,15 +132,11 @@ function GroupHeatmap(
         </p>
       )}
       {references.length > 0 && (
-        <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-gray-600">
-          {references.map((reference) => (
-            <span key={reference.id}>
-              <strong>C{reference.column + 1}/R{reference.row + 1}:</strong>
-              {" "}
-              {reference.label}
-            </span>
-          ))}
-        </div>
+        <MatrixReferenceLegend
+          references={references}
+          size={size}
+          className="mt-3"
+        />
       )}
     </div>
   );
