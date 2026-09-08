@@ -52,22 +52,22 @@ proposals and votes; deleting the survey removes them.
 Proposal prompts are limited to 500 characters. Choice questions require 2–20
 distinct nonempty options of up to 120 characters each. Scales use integer
 bounds between -100 and 100 and contain 2–21 steps. Matrix questions use a 2×2
-grid, four nonempty endpoint labels of up to 60 characters, and up to 100
-reference labels of 120 characters each. Submission and approval requests are
-limited to 16 KB.
+grid, a nonempty subject label of up to 120 characters, four nonempty endpoint
+labels of up to 60 characters, and up to 100 optional comparison-point labels of
+120 characters each. Submission and approval requests are limited to 16 KB.
 
 ## Question types
 
-| Type                                | Respondent sees                                                                                            | Results visualization                                                                                                                     |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Multiple choice (one)               | Tappable cards                                                                                             | Colored bar chart; grouped bars when faceted                                                                                              |
-| Multiple choice (many)              | Tappable cards                                                                                             | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
-| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                                                | Heat-colored histogram + animated mean                                                                                                    |
-| **Ranked choice**                   | Tap-to-rank list with reorder                                                                              | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
-| Word cloud                          | Single word/phrase                                                                                         | Sized, tilted word cloud                                                                                                                  |
-| Free text                           | Textarea                                                                                                   | Sticky-note wall                                                                                                                          |
-| Emoji reaction                      | Emoji grid                                                                                                 | Floating emoji bubbles scaled by count                                                                                                    |
-| **2×2 matrix**                      | Tappable 2×2 grid with axis endpoints, independently positioned reference symbols and labels, and a legend | Cell heatmap with counts, percentages, the same positioned references, and a legend; one heatmap per facet group                          |
+| Type                                | Respondent sees                                                                                                                                         | Results visualization                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple choice (one)               | Tappable cards                                                                                                                                          | Colored bar chart; grouped bars when faceted                                                                                              |
+| Multiple choice (many)              | Tappable cards                                                                                                                                          | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
+| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                                                                                             | Heat-colored histogram + animated mean                                                                                                    |
+| **Ranked choice**                   | Tap-to-rank list with reorder                                                                                                                           | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
+| Word cloud                          | Single word/phrase                                                                                                                                      | Sized, tilted word cloud                                                                                                                  |
+| Free text                           | Textarea                                                                                                                                                | Sticky-note wall                                                                                                                          |
+| Emoji reaction                      | Emoji grid                                                                                                                                              | Floating emoji bubbles scaled by count                                                                                                    |
+| **2×2 matrix**                      | Drag/touch placement of a creator-labeled symbol anywhere in the plane, with tap and keyboard fallbacks, axis endpoints, and optional comparison points | Toggleable placement scatter plot and density heatmap with the same comparison points; one matrix per facet group                         |
 
 ## Admin controls
 
@@ -89,16 +89,28 @@ limited to 16 KB.
   approve
 - CSV export, clear responses, delete survey
 
-Matrix answers select one of four cells for the item named in the question
-prompt. Reference items are read-only context, not additional answers. Each
-reference appears in its cell as a symbol connected to a label, and question
-creators can drag the symbol and label independently to avoid visual overlap
-while keeping the full label inside its cell. The relative placement is reused
-in the builder, respondent grid, and results heatmap. Each reference uses the
-same shape and color in the grid and retained legend; its legend entry includes
-a small highlighted grid showing its cell. CSV exports describe a placement with
-one-based coordinates such as `column 2, row 1 from
-top`.
+Matrix questions have a creator-defined subject label for the symbol each
+respondent places. The respondent can drag it with a mouse, touch, or stylus,
+tap/click a destination, or use the arrow keys for precise movement. Answers are
+stored as normalized coordinates measured from the top-left: `x` increases from
+left to right and `y` increases from top to bottom. Merely viewing the centered
+unplaced symbol does not answer the question; the existing **Required** setting
+still controls whether it may be skipped.
+
+Comparison points are optional read-only context, not additional answers. Each
+one appears in its cell as a symbol connected to a label, and question creators
+can drag the symbol and label independently to avoid visual overlap while
+keeping the full label inside its cell. Their relative placement is reused in
+the builder, respondent grid, scatter results, and density results. Each
+comparison point uses the same shape and color in the grid and retained legend;
+its legend entry includes a small highlighted grid showing its cell.
+
+Results can switch between plotting every submitted placement and a 12×12
+density heatmap. Exact overlapping scatter points receive small deterministic
+offsets so repeated positions remain visible. CSV exports use stable values such
+as `x 0.750, y 0.250 from top-left`. Existing `{ row, column }` answers remain
+compatible: they are interpreted at the center of the original quadrant and
+canonicalized to continuous coordinates when submitted again.
 
 ## Architecture
 
@@ -168,8 +180,8 @@ frontend/
   pages/Present.tsx            fullscreen QR join slide
   components/builder/          QuestionEditor and matrix configuration editor
   components/proposals/        participant composer, proposal cards, admin review
-  components/respond/          QuestionInput, ranked drag/tap, and matrix cell selection
-  components/charts/           Charts, matrix heatmap, ResultsView (polling, facets)
+  components/respond/          QuestionInput, ranked drag/tap, and continuous matrix placement
+  components/charts/           Charts, matrix scatter/density results, ResultsView (polling, facets)
 ```
 
 ## Proposal regression tests
@@ -182,5 +194,6 @@ Val Town asset utility initialize without real credentials.
 ```sh
 VAL_TOWN_API_KEY=local-test-placeholder deno test --allow-import --allow-env=VAL_TOWN_API_KEY \
   --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/aggregate_test.ts backend/proposal-sql_test.ts \
-  frontend/lib/questionDraft_test.ts frontend/components/MatrixCellReferences_test.ts
+  frontend/lib/questionDraft_test.ts frontend/components/MatrixCellReferences_test.ts \
+  frontend/components/respond/MatrixInput_test.ts frontend/components/charts/MatrixHeatmap_test.ts
 ```

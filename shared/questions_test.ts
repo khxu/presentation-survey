@@ -1,12 +1,15 @@
 import { deepStrictEqual, notEqual, ok, throws } from "node:assert/strict";
 import {
+  clampMatrixAnswerPosition,
   clampMatrixReferencePosition,
   isMatrixAnswer,
+  matrixAnswerCell,
   matrixCellKey,
   matrixReferenceDefaultPosition,
   newQuestion,
   normalizeApprovedQuestion,
   normalizeDraft,
+  normalizeMatrixAnswer,
   normalizeStoredQuestions,
   QuestionValidationError,
   referencesWithinSize,
@@ -25,6 +28,9 @@ Deno.test("all question types normalize, preserving participant fields only", ()
         id: "b",
         label: "No",
       }];
+    }
+    if (type === "matrix_2x2") {
+      question.matrixSubjectLabel = "Initiative";
     }
     const draft = normalizeDraft({
       ...question,
@@ -175,9 +181,15 @@ Deno.test("stored questions preserve release state and default legacy questions 
 Deno.test("matrix questions normalize configuration and replace untrusted reference IDs", () => {
   const question = newQuestion("matrix_2x2");
   deepStrictEqual(
-    [question.matrixSize, question.matrixAxisLabels, question.matrixReferences],
+    [
+      question.matrixSize,
+      question.matrixSubjectLabel,
+      question.matrixAxisLabels,
+      question.matrixReferences,
+    ],
     [
       2,
+      "",
       { left: "Left", right: "Right", bottom: "Bottom", top: "Top" },
       [],
     ],
@@ -188,6 +200,7 @@ Deno.test("matrix questions normalize configuration and replace untrusted refere
     prompt: "Where should this initiative go?",
     options: [{ id: "ignored", label: "Ignored" }],
     matrixSize: 2,
+    matrixSubjectLabel: " Migration ",
     matrixAxisLabels: {
       left: " Not urgent ",
       right: "Urgent",
@@ -202,6 +215,7 @@ Deno.test("matrix questions normalize configuration and replace untrusted refere
 
   deepStrictEqual(draft.options, []);
   deepStrictEqual(draft.matrixSize, 2);
+  deepStrictEqual(draft.matrixSubjectLabel, "Migration");
   deepStrictEqual(draft.matrixAxisLabels, {
     left: "Not urgent",
     right: "Urgent",
@@ -257,6 +271,7 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
     prompt: "Place it",
     options: [],
     matrixSize: 2,
+    matrixSubjectLabel: "Initiative",
     matrixAxisLabels: {
       left: "Low",
       right: "High",
@@ -269,6 +284,8 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
     const patch of [
       { matrixSize: 3 },
       { matrixSize: 4 },
+      { matrixSubjectLabel: "" },
+      { matrixSubjectLabel: "x".repeat(121) },
       {
         matrixAxisLabels: {
           left: "",
@@ -329,6 +346,7 @@ Deno.test("matrix approval disables demographics and stored matrices receive saf
     prompt: "Place it",
     options: [],
     matrixSize: 2,
+    matrixSubjectLabel: "Initiative",
     matrixAxisLabels: {
       left: "Low",
       right: "High",
@@ -349,6 +367,7 @@ Deno.test("matrix approval disables demographics and stored matrices receive saf
     ],
   }])[0];
   deepStrictEqual(stored.matrixSize, 2);
+  deepStrictEqual(stored.matrixSubjectLabel, "Item");
   deepStrictEqual(stored.matrixAxisLabels, {
     left: "Left",
     right: "Right",
@@ -455,6 +474,7 @@ Deno.test("matrix reference positions are normalized, preserved, and staggered p
     prompt: "Place it",
     options: [],
     matrixSize: 2,
+    matrixSubjectLabel: "Initiative",
     matrixAxisLabels: {
       left: "Low",
       right: "High",
@@ -480,7 +500,7 @@ Deno.test("matrix reference positions are normalized, preserved, and staggered p
   );
 });
 
-Deno.test("matrix helpers, sanitization, and aggregation enforce cell bounds", () => {
+Deno.test("matrix helpers, sanitization, and aggregation support continuous and legacy positions", () => {
   const q = {
     ...newQuestion("matrix_2x2"),
     id: "matrix",
@@ -499,8 +519,19 @@ Deno.test("matrix helpers, sanitization, and aggregation enforce cell bounds", (
     questions: [q],
   };
 
-  deepStrictEqual(isMatrixAnswer({ row: 0, column: 1 }, 2), true);
-  deepStrictEqual(isMatrixAnswer({ row: 2, column: 0 }, 2), false);
+  deepStrictEqual(isMatrixAnswer({ x: 0.75, y: 0.25 }), true);
+  deepStrictEqual(isMatrixAnswer({ x: 1.1, y: 0.25 }), false);
+  deepStrictEqual(
+    normalizeMatrixAnswer({ row: 0, column: 1 }, 2),
+    { x: 0.75, y: 0.25 },
+  );
+  deepStrictEqual(normalizeMatrixAnswer({ row: 2, column: 0 }, 2), null);
+  deepStrictEqual(matrixAnswerCell({ x: 1, y: 1 }, 2), {
+    row: 1,
+    column: 1,
+  });
+  deepStrictEqual(clampMatrixAnswerPosition(-1), 0);
+  deepStrictEqual(clampMatrixAnswerPosition(2), 1);
   deepStrictEqual(
     referencesWithinSize([
       { id: "a", row: 1, column: 1, label: "Inside" },
@@ -509,25 +540,34 @@ Deno.test("matrix helpers, sanitization, and aggregation enforce cell bounds", (
     ["a"],
   );
   deepStrictEqual(
-    sanitizeAnswers(survey, { matrix: { row: 1, column: 0, extra: true } }),
+    sanitizeAnswers(survey, { matrix: { x: 0.1234, y: 0.8765, extra: true } }),
     {
-      matrix: { row: 1, column: 0 },
+      matrix: { x: 0.123, y: 0.877 },
     },
   );
   deepStrictEqual(
-    sanitizeAnswers(survey, { matrix: { row: 2, column: 0 } }),
+    sanitizeAnswers(survey, { matrix: { row: 1, column: 0 } }),
+    { matrix: { x: 0.25, y: 0.75 } },
+  );
+  deepStrictEqual(
+    sanitizeAnswers(survey, { matrix: { x: 2, y: 0 } }),
     {},
   );
   deepStrictEqual(sanitizeAnswers(survey, { matrix: [1, 0] }), {});
 
   const aggregate = aggregateQuestion(q, [
-    { matrix: { row: 0, column: 0 } },
-    { matrix: { row: 0, column: 0 } },
-    { matrix: { row: 1, column: 0 } },
+    { matrix: { x: 0.1, y: 0.1 } },
+    { matrix: { x: 0.4, y: 0.4 } },
+    { matrix: { row: 1, column: 0 } } as any,
     { matrix: { row: 9, column: 9 } },
   ]);
   deepStrictEqual(aggregate.responseCount, 3);
   deepStrictEqual(aggregate.matrixCounts?.[matrixCellKey(0, 0)], 2);
   deepStrictEqual(aggregate.matrixCounts?.[matrixCellKey(1, 0)], 1);
   deepStrictEqual(Object.keys(aggregate.matrixCounts ?? {}).length, 4);
+  deepStrictEqual(aggregate.matrixPoints, [
+    { x: 0.1, y: 0.1 },
+    { x: 0.4, y: 0.4 },
+    { x: 0.25, y: 0.75 },
+  ]);
 });

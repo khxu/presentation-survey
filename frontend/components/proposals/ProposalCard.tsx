@@ -29,8 +29,9 @@ export function ProposalCard(
       {proposal.draft.type === "matrix_2x2" && (
         <div className="mt-2 text-sm text-gray-600">
           <p>
-            2×2 matrix · {proposal.draft.matrixReferences?.length ?? 0}{" "}
-            reference item
+            2×2 matrix · place{" "}
+            <strong>{proposal.draft.matrixSubjectLabel}</strong> ·{" "}
+            {proposal.draft.matrixReferences?.length ?? 0} comparison point
             {(proposal.draft.matrixReferences?.length ?? 0) === 1 ? "" : "s"}
           </p>
           {proposal.draft.matrixAxisLabels && (
