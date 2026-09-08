@@ -28,7 +28,11 @@ export function UpSetChart(
 ) {
   const faceted = groups.length > 1;
   return (
-    <div className={faceted ? "grid md:grid-cols-2 gap-4" : ""}>
+    <div
+      className={faceted
+        ? "grid min-w-0 w-full md:grid-cols-2 gap-4"
+        : "min-w-0 w-full"}
+    >
       {groups.map((group, index) => (
         <UpSetPanel
           key={group.key}
@@ -94,14 +98,14 @@ function UpSetPanel({
         </div>
       )}
       <div
-        className="overflow-x-auto pb-2"
+        className="min-w-0 w-full max-w-full overflow-x-auto pb-2"
         role="img"
         aria-label={`UpSet plot for ${q.prompt}${
           groupLabel ? `, ${groupLabel}` : ""
         }`}
       >
         <div
-          className="flex"
+          className="flex w-max"
           style={{
             minWidth: LABEL_WIDTH + intersections.length * COLUMN_WIDTH,
           }}

@@ -228,7 +228,9 @@ function QuestionCard(
   );
   return (
     <div
-      className={`bg-white rounded-2xl shadow p-5 ${big ? "min-h-[60vh]" : ""}`}
+      className={`min-w-0 bg-white rounded-2xl shadow p-5 ${
+        big ? "min-h-[60vh]" : ""
+      }`}
     >
       <div className="flex items-start gap-3 mb-3">
         <span className="text-xs font-mono bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 mt-1">
@@ -271,7 +273,7 @@ function MultiChoiceChart(
 ) {
   const [mode, setMode] = useState<"intersections" | "totals">("intersections");
   return (
-    <div>
+    <div className="min-w-0 w-full">
       <div
         className="flex justify-end gap-1 mb-3 text-xs"
         role="group"
