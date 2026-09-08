@@ -1,11 +1,32 @@
 import { DEFAULT_EMOJIS, hasOptions, QUESTION_TYPE_LABELS } from "./types.ts";
-import type { Option, Question, QuestionDraft, QuestionType } from "./types.ts";
+import type {
+  MatrixAnswer,
+  MatrixAxisLabels,
+  MatrixReference,
+  MatrixSize,
+  Option,
+  Question,
+  QuestionDraft,
+  QuestionType,
+} from "./types.ts";
 
 export const QUESTION_LIMITS = {
   prompt: 500,
   optionLabel: 120,
   options: 20,
   scaleSteps: 21,
+  matrixAxisLabel: 60,
+  matrixReferenceLabel: 120,
+  matrixReferences: 100,
+};
+
+export const MATRIX_SIZES: MatrixSize[] = [2, 4, 6];
+
+export const DEFAULT_MATRIX_AXIS_LABELS: MatrixAxisLabels = {
+  left: "Left",
+  right: "Right",
+  bottom: "Bottom",
+  top: "Top",
 };
 
 export class QuestionValidationError extends Error {}
@@ -38,6 +59,13 @@ export function newQuestion(type: QuestionType = "single_choice"): Question {
       }))
       : [],
     ...(type === "scale" ? { scaleMin: 1, scaleMax: 5 } : {}),
+    ...(type === "matrix_2x2"
+      ? {
+        matrixSize: 2 as MatrixSize,
+        matrixAxisLabels: { ...DEFAULT_MATRIX_AXIS_LABELS },
+        matrixReferences: [],
+      }
+      : {}),
     isDemographic: false,
     required: false,
     released: false,
@@ -48,13 +76,27 @@ export function newQuestion(type: QuestionType = "single_choice"): Question {
 /** Questions saved before progressive release existed remain audience-visible. */
 export function normalizeStoredQuestions(raw: unknown): Question[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((question, position) => ({
-    ...(question as Question),
-    position,
-    released: typeof (question as Partial<Question>)?.released === "boolean"
-      ? (question as Question).released
-      : true,
-  }));
+  return raw.map((question, position) => {
+    const stored = question as Question;
+    return {
+      ...stored,
+      position,
+      released: typeof (question as Partial<Question>)?.released === "boolean"
+        ? stored.released
+        : true,
+      ...(stored.type === "matrix_2x2"
+        ? {
+          matrixSize: isMatrixSize(stored.matrixSize) ? stored.matrixSize : 2,
+          matrixAxisLabels: normalizeStoredAxisLabels(stored.matrixAxisLabels),
+          matrixReferences: normalizeStoredReferences(
+            stored.matrixReferences,
+            isMatrixSize(stored.matrixSize) ? stored.matrixSize : 2,
+          ),
+          isDemographic: false,
+        }
+        : {}),
+    };
+  });
 }
 
 function record(raw: unknown): Record<string, unknown> {
@@ -71,6 +113,131 @@ function text(raw: unknown, max: number, label: string): string {
     );
   }
   return raw.trim();
+}
+
+export function isMatrixSize(raw: unknown): raw is MatrixSize {
+  return typeof raw === "number" && MATRIX_SIZES.includes(raw as MatrixSize);
+}
+
+export function matrixCellKey(row: number, column: number): string {
+  return `${row},${column}`;
+}
+
+export function isMatrixAnswer(
+  raw: unknown,
+  size: MatrixSize,
+): raw is MatrixAnswer {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const answer = raw as Partial<MatrixAnswer>;
+  return Number.isInteger(answer.row) && Number.isInteger(answer.column) &&
+    answer.row! >= 0 && answer.row! < size &&
+    answer.column! >= 0 && answer.column! < size;
+}
+
+export function referencesWithinSize(
+  references: MatrixReference[] | undefined,
+  size: MatrixSize,
+): MatrixReference[] {
+  return (references ?? []).filter((reference) =>
+    Number.isInteger(reference.row) && Number.isInteger(reference.column) &&
+    reference.row >= 0 && reference.row < size &&
+    reference.column >= 0 && reference.column < size
+  );
+}
+
+function normalizeStoredAxisLabels(raw: unknown): MatrixAxisLabels {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_MATRIX_AXIS_LABELS };
+  }
+  const labels = raw as Partial<MatrixAxisLabels>;
+  return {
+    left: typeof labels.left === "string" && labels.left.trim()
+      ? labels.left
+      : DEFAULT_MATRIX_AXIS_LABELS.left,
+    right: typeof labels.right === "string" && labels.right.trim()
+      ? labels.right
+      : DEFAULT_MATRIX_AXIS_LABELS.right,
+    bottom: typeof labels.bottom === "string" && labels.bottom.trim()
+      ? labels.bottom
+      : DEFAULT_MATRIX_AXIS_LABELS.bottom,
+    top: typeof labels.top === "string" && labels.top.trim()
+      ? labels.top
+      : DEFAULT_MATRIX_AXIS_LABELS.top,
+  };
+}
+
+function normalizeStoredReferences(
+  raw: unknown,
+  size: MatrixSize,
+): MatrixReference[] {
+  if (!Array.isArray(raw)) return [];
+  return referencesWithinSize(
+    raw.flatMap((reference) => {
+      if (
+        !reference || typeof reference !== "object" ||
+        typeof (reference as MatrixReference).id !== "string" ||
+        typeof (reference as MatrixReference).label !== "string" ||
+        !(reference as MatrixReference).label.trim()
+      ) {
+        return [];
+      }
+      return [{
+        ...(reference as MatrixReference),
+        label: (reference as MatrixReference).label.trim(),
+      }];
+    }).slice(0, QUESTION_LIMITS.matrixReferences),
+    size,
+  );
+}
+
+function matrixAxisLabels(raw: unknown): MatrixAxisLabels {
+  const input = record(raw);
+  return {
+    left: text(input.left, QUESTION_LIMITS.matrixAxisLabel, "Left axis label"),
+    right: text(
+      input.right,
+      QUESTION_LIMITS.matrixAxisLabel,
+      "Right axis label",
+    ),
+    bottom: text(
+      input.bottom,
+      QUESTION_LIMITS.matrixAxisLabel,
+      "Bottom axis label",
+    ),
+    top: text(input.top, QUESTION_LIMITS.matrixAxisLabel, "Top axis label"),
+  };
+}
+
+function matrixReferences(raw: unknown, size: MatrixSize): MatrixReference[] {
+  if (!Array.isArray(raw) || raw.length > QUESTION_LIMITS.matrixReferences) {
+    throw new QuestionValidationError(
+      `Provide no more than ${QUESTION_LIMITS.matrixReferences} matrix reference labels.`,
+    );
+  }
+  return raw.map((reference) => {
+    const input = record(reference);
+    const row = input.row;
+    const column = input.column;
+    if (
+      typeof row !== "number" || typeof column !== "number" ||
+      !Number.isSafeInteger(row) || !Number.isSafeInteger(column) ||
+      row < 0 || row >= size || column < 0 || column >= size
+    ) {
+      throw new QuestionValidationError(
+        "Matrix reference cells must be within the selected grid.",
+      );
+    }
+    return {
+      id: crypto.randomUUID(),
+      row,
+      column,
+      label: text(
+        input.label,
+        QUESTION_LIMITS.matrixReferenceLabel,
+        "Matrix reference label",
+      ),
+    };
+  });
 }
 
 /** Ignore client IDs and admin flags; every approved question gets fresh identifiers. */
@@ -123,6 +290,17 @@ export function normalizeDraft(raw: unknown): QuestionDraft {
     }
     draft.scaleMin = min;
     draft.scaleMax = max;
+  }
+  if (type === "matrix_2x2") {
+    if (!isMatrixSize(input.matrixSize)) {
+      throw new QuestionValidationError("Choose a 2x2, 4x4, or 6x6 matrix.");
+    }
+    draft.matrixSize = input.matrixSize;
+    draft.matrixAxisLabels = matrixAxisLabels(input.matrixAxisLabels);
+    draft.matrixReferences = matrixReferences(
+      input.matrixReferences,
+      input.matrixSize,
+    );
   }
   return draft;
 }

@@ -14,6 +14,7 @@ import {
   TextList,
   WordCloudChart,
 } from "./Charts.tsx";
+import { MatrixHeatmap } from "./MatrixHeatmap.tsx";
 import { UpSetChart } from "./UpSetChart.tsx";
 
 interface Props {
@@ -265,6 +266,8 @@ function Chart({ q, groups }: { q: Question; groups: FacetGroup[] }) {
       return <WordCloudChart q={q} groups={groups} />;
     case "free_text":
       return <TextList q={q} groups={groups} />;
+    case "matrix_2x2":
+      return <MatrixHeatmap q={q} groups={groups} />;
   }
 }
 

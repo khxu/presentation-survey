@@ -1,4 +1,4 @@
-import { deepStrictEqual, ok } from "node:assert/strict";
+import { deepStrictEqual, notEqual, ok } from "node:assert/strict";
 import handler from "../index.ts";
 import type { ProposalsPayload, Question, Survey } from "../shared/types.ts";
 import { sqlite } from "./sqlite.ts";
@@ -524,6 +524,88 @@ Deno.test("API: legacy saved questions remain released and can be edited", async
     });
     deepStrictEqual(response.status, 200);
     deepStrictEqual((await response.json()).survey.questions, edited);
+  } finally {
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
+
+Deno.test("API: matrix proposals, responses, results, and CSV export", async () => {
+  const { slug, adminKey } = await create();
+  try {
+    const matrix = {
+      type: "matrix_2x2",
+      prompt: "Where should the migration go?",
+      options: [],
+      matrixSize: 6,
+      matrixAxisLabels: {
+        left: "Not urgent",
+        right: "Urgent",
+        bottom: "Not important",
+        top: "Important",
+      },
+      matrixReferences: [
+        { id: "untrusted", row: 0, column: 5, label: "Security patch" },
+        { id: "untrusted-2", row: 5, column: 0, label: "Office repaint" },
+      ],
+    };
+    deepStrictEqual(
+      (await request(`/api/s/${slug}/proposals`, "POST", { question: matrix }))
+        .status,
+      201,
+    );
+    const proposal = (await proposals(slug)).proposals[0];
+    deepStrictEqual(proposal.draft.matrixSize, 6);
+    notEqual(proposal.draft.matrixReferences?.[0].id, "untrusted");
+
+    const approval = await request(
+      `/api/admin/${adminKey}/proposals/${proposal.id}/approve`,
+      "POST",
+      { question: { ...proposal.draft, required: true, isDemographic: true } },
+    );
+    deepStrictEqual(approval.status, 200);
+    const approved = (await approval.json()).approvedQuestion as Question;
+    deepStrictEqual(
+      [approved.type, approved.required, approved.isDemographic],
+      [
+        "matrix_2x2",
+        true,
+        false,
+      ],
+    );
+
+    await request(
+      `/api/admin/${adminKey}/questions/${approved.id}/release`,
+      "PATCH",
+      {
+        released: true,
+      },
+    );
+    const first = await request(`/api/s/${slug}`);
+    const cookie = first.headers.get("set-cookie")!.split(";")[0];
+    const invalid = await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [approved.id]: { row: 6, column: 0 } },
+    }, cookie);
+    deepStrictEqual((await invalid.json()).answers, {});
+
+    const valid = await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [approved.id]: { row: 1, column: 4, ignored: true } },
+    }, cookie);
+    deepStrictEqual((await valid.json()).answers, {
+      [approved.id]: { row: 1, column: 4 },
+    });
+
+    const results = await (await request(`/api/admin/${adminKey}/results`))
+      .json();
+    deepStrictEqual(results.groups[0].aggregates[0].responseCount, 1);
+    deepStrictEqual(results.groups[0].aggregates[0].matrixCounts["1,4"], 1);
+    deepStrictEqual(
+      Object.keys(results.groups[0].aggregates[0].matrixCounts).length,
+      36,
+    );
+
+    const csv = await request(`/api/admin/${adminKey}/export.csv`);
+    deepStrictEqual(csv.status, 200);
+    ok((await csv.text()).includes('"column 5, row 2 from top"'));
   } finally {
     await request(`/api/admin/${adminKey}`, "DELETE");
   }

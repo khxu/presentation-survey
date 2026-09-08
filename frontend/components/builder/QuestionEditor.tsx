@@ -3,6 +3,7 @@ import { hasOptions, QUESTION_TYPE_LABELS } from "../../../shared/types.ts";
 import type { Question, QuestionType } from "../../../shared/types.ts";
 import { uid } from "../../lib/api.ts";
 import { newQuestion, QUESTION_LIMITS } from "../../../shared/questions.ts";
+import { MatrixEditor } from "./MatrixEditor.tsx";
 
 export { newQuestion } from "../../../shared/questions.ts";
 
@@ -50,11 +51,13 @@ export function QuestionEditor({
 
   function changeType(type: QuestionType) {
     const fresh = newQuestion(type);
+    const nextCanFacet = type === "single_choice" || type === "multi_choice" ||
+      type === "scale" || type === "emoji_reaction";
     onChange({
       ...fresh,
       id: q.id,
       prompt: q.prompt,
-      isDemographic: q.isDemographic,
+      isDemographic: nextCanFacet && q.isDemographic,
       required: q.required,
       released: q.released,
       hidden: q.hidden,
@@ -255,6 +258,13 @@ export function QuestionEditor({
                 (e.g. 1–5, 1–10, or 0–10 for NPS)
               </span>
             </div>
+          )}
+
+          {q.type === "matrix_2x2" && (
+            <MatrixEditor
+              q={q}
+              onChange={onChange}
+            />
           )}
         </div>
       </div>

@@ -31,12 +31,12 @@ word clouds, and breakdowns by who's in the audience.
 
 ## Community questions
 
-Participants can propose any supported question type, including options or scale
-bounds. Pending proposals are public, sorted by upvotes (oldest first on ties),
-and refresh every 5 seconds while the page is visible. Each device can toggle
-one upvote per proposal; submitting a proposal does not automatically vote for
-it. Proposals do not require answering the survey first, and participants may
-upvote their own ideas.
+Participants can propose any supported question type, including options, scale
+bounds, or matrix configuration. Pending proposals are public, sorted by upvotes
+(oldest first on ties), and refresh every 5 seconds while the page is visible.
+Each device can toggle one upvote per proposal; submitting a proposal does not
+automatically vote for it. Proposals do not require answering the survey first,
+and participants may upvote their own ideas.
 
 The presenter sets required, demographic, and result-visibility flags during
 review. Approval is manual regardless of vote count, appends the edited question
@@ -51,20 +51,23 @@ proposals and votes; deleting the survey removes them.
 
 Proposal prompts are limited to 500 characters. Choice questions require 2–20
 distinct nonempty options of up to 120 characters each. Scales use integer
-bounds between -100 and 100 and contain 2–21 steps. Submission and approval
-requests are limited to 16 KB.
+bounds between -100 and 100 and contain 2–21 steps. Matrix questions use a 2×2,
+4×4, or 6×6 grid, four nonempty endpoint labels of up to 60 characters, and up
+to 100 reference labels of 120 characters each. Submission and approval requests
+are limited to 16 KB.
 
 ## Question types
 
-| Type                                | Respondent sees               | Results visualization                                                                                                                     |
-| ----------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Multiple choice (one)               | Tappable cards                | Colored bar chart; grouped bars when faceted                                                                                              |
-| Multiple choice (many)              | Tappable cards                | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
-| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                   | Heat-colored histogram + animated mean                                                                                                    |
-| **Ranked choice**                   | Tap-to-rank list with reorder | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
-| Word cloud                          | Single word/phrase            | Sized, tilted word cloud                                                                                                                  |
-| Free text                           | Textarea                      | Sticky-note wall                                                                                                                          |
-| Emoji reaction                      | Emoji grid                    | Floating emoji bubbles scaled by count                                                                                                    |
+| Type                                | Respondent sees                                                                           | Results visualization                                                                                                                     |
+| ----------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple choice (one)               | Tappable cards                                                                            | Colored bar chart; grouped bars when faceted                                                                                              |
+| Multiple choice (many)              | Tappable cards                                                                            | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
+| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                               | Heat-colored histogram + animated mean                                                                                                    |
+| **Ranked choice**                   | Tap-to-rank list with reorder                                                             | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
+| Word cloud                          | Single word/phrase                                                                        | Sized, tilted word cloud                                                                                                                  |
+| Free text                           | Textarea                                                                                  | Sticky-note wall                                                                                                                          |
+| Emoji reaction                      | Emoji grid                                                                                | Floating emoji bubbles scaled by count                                                                                                    |
+| **2×2 matrix**                      | Tappable 2×2, 4×4, or 6×6 grid with axis endpoints and creator-positioned reference items | Cell heatmap with counts and percentages; one heatmap per facet group                                                                     |
 
 ## Admin controls
 
@@ -85,6 +88,11 @@ requests are limited to 16 KB.
 - **Proposals** — review the audience's most-upvoted question drafts, edit, and
   approve
 - CSV export, clear responses, delete survey
+
+Matrix answers select one cell for the item named in the question prompt. A 6×6
+matrix represents four 3×3 quadrants and has 36 selectable cells. Reference
+items are read-only context, not additional answers. CSV exports describe a
+placement with one-based coordinates such as `column 5, row 2 from top`.
 
 ## Architecture
 
@@ -152,10 +160,10 @@ frontend/
   lib/respondFlow.ts           active-question reconciliation across live releases
   pages/Results.tsx            public live results
   pages/Present.tsx            fullscreen QR join slide
-  components/builder/          QuestionEditor
+  components/builder/          QuestionEditor and matrix configuration editor
   components/proposals/        participant composer, proposal cards, admin review
-  components/respond/          QuestionInput (all types, ranked drag/tap)
-  components/charts/           Charts (recharts + custom), ResultsView (polling, facets)
+  components/respond/          QuestionInput, ranked drag/tap, and matrix cell selection
+  components/charts/           Charts, matrix heatmap, ResultsView (polling, facets)
 ```
 
 ## Proposal regression tests

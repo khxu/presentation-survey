@@ -1,6 +1,7 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
 import {
   canonicalizeChoiceSelection,
+  isMatrixAnswer,
   normalizeStoredQuestions,
 } from "../shared/questions.ts";
 import { ensureSchema, randomId, sha256, sqlite } from "./db.ts";
@@ -319,6 +320,13 @@ export function sanitizeAnswers(survey: Survey, raw: unknown): Answers {
       case "word_cloud":
         if (typeof v === "string") out[q.id] = v.trim().slice(0, 40);
         break;
+      case "matrix_2x2": {
+        const size = q.matrixSize ?? 2;
+        if (isMatrixAnswer(v, size)) {
+          out[q.id] = { row: v.row, column: v.column };
+        }
+        break;
+      }
     }
   }
   return out;

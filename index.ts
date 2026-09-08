@@ -308,6 +308,12 @@ admin.get("/export.csv", async (c) => {
       if (Array.isArray(v)) {
         return esc(v.map((x) => optLabel(q, x)).join(" > "));
       }
+      if (
+        q.type === "matrix_2x2" && v && typeof v === "object" &&
+        Number.isInteger(v.row) && Number.isInteger(v.column)
+      ) {
+        return esc(`column ${v.column + 1}, row ${v.row + 1} from top`);
+      }
       if (typeof v === "string" && q.options.length) return esc(optLabel(q, v));
       return esc(v);
     }).join(",")

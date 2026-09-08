@@ -1,14 +1,18 @@
 import { deepStrictEqual, notEqual, ok, throws } from "node:assert/strict";
 import {
+  isMatrixAnswer,
+  matrixCellKey,
   newQuestion,
   normalizeApprovedQuestion,
   normalizeDraft,
   normalizeStoredQuestions,
   QuestionValidationError,
+  referencesWithinSize,
 } from "./questions.ts";
 import { hasOptions, QUESTION_TYPE_LABELS } from "./types.ts";
-import type { QuestionType } from "./types.ts";
+import type { QuestionType, Survey } from "./types.ts";
 import { aggregateQuestion } from "../backend/aggregate.ts";
+import { sanitizeAnswers } from "../backend/surveys.ts";
 
 Deno.test("all question types normalize, preserving participant fields only", () => {
   for (const type of Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]) {
@@ -164,4 +168,183 @@ Deno.test("stored questions preserve release state and default legacy questions 
       [1, false],
     ],
   );
+});
+
+Deno.test("matrix questions normalize configuration and replace untrusted reference IDs", () => {
+  const question = newQuestion("matrix_2x2");
+  deepStrictEqual(
+    [question.matrixSize, question.matrixAxisLabels, question.matrixReferences],
+    [
+      2,
+      { left: "Left", right: "Right", bottom: "Bottom", top: "Top" },
+      [],
+    ],
+  );
+
+  const draft = normalizeDraft({
+    type: "matrix_2x2",
+    prompt: "Where should this initiative go?",
+    options: [{ id: "ignored", label: "Ignored" }],
+    matrixSize: 6,
+    matrixAxisLabels: {
+      left: " Not urgent ",
+      right: "Urgent",
+      bottom: "Not important",
+      top: " Important ",
+    },
+    matrixReferences: [
+      { id: "untrusted-a", row: 0, column: 5, label: " Do now " },
+      { id: "untrusted-b", row: 5, column: 0, label: "Defer" },
+    ],
+  });
+
+  deepStrictEqual(draft.options, []);
+  deepStrictEqual(draft.matrixSize, 6);
+  deepStrictEqual(draft.matrixAxisLabels, {
+    left: "Not urgent",
+    right: "Urgent",
+    bottom: "Not important",
+    top: "Important",
+  });
+  deepStrictEqual(
+    draft.matrixReferences?.map(({ row, column, label }) => ({
+      row,
+      column,
+      label,
+    })),
+    [
+      { row: 0, column: 5, label: "Do now" },
+      { row: 5, column: 0, label: "Defer" },
+    ],
+  );
+  notEqual(draft.matrixReferences?.[0].id, "untrusted-a");
+  notEqual(draft.matrixReferences?.[0].id, draft.matrixReferences?.[1].id);
+});
+
+Deno.test("matrix validation rejects unsupported grids, incomplete axes, and invalid references", () => {
+  const base = {
+    type: "matrix_2x2",
+    prompt: "Place it",
+    options: [],
+    matrixSize: 4,
+    matrixAxisLabels: {
+      left: "Low",
+      right: "High",
+      bottom: "Easy",
+      top: "Hard",
+    },
+    matrixReferences: [],
+  };
+  for (
+    const patch of [
+      { matrixSize: 3 },
+      {
+        matrixAxisLabels: {
+          left: "",
+          right: "High",
+          bottom: "Easy",
+          top: "Hard",
+        },
+      },
+      { matrixReferences: [{ row: -1, column: 0, label: "Outside" }] },
+      { matrixReferences: [{ row: 4, column: 0, label: "Outside" }] },
+      { matrixReferences: [{ row: 0.5, column: 0, label: "Fractional" }] },
+      { matrixReferences: [{ row: 0, column: 0, label: " " }] },
+    ]
+  ) {
+    throws(
+      () => normalizeDraft({ ...base, ...patch }),
+      QuestionValidationError,
+    );
+  }
+});
+
+Deno.test("matrix approval disables demographics and stored matrices receive safe defaults", () => {
+  const raw = {
+    type: "matrix_2x2",
+    prompt: "Place it",
+    options: [],
+    matrixSize: 2,
+    matrixAxisLabels: {
+      left: "Low",
+      right: "High",
+      bottom: "Easy",
+      top: "Hard",
+    },
+    matrixReferences: [{ id: "old", row: 1, column: 1, label: "Reference" }],
+    isDemographic: true,
+  };
+  deepStrictEqual(normalizeApprovedQuestion(raw).isDemographic, false);
+
+  const stored = normalizeStoredQuestions([{
+    ...newQuestion("matrix_2x2"),
+    matrixSize: 3,
+    matrixAxisLabels: undefined,
+    matrixReferences: [
+      { id: "inside", row: 1, column: 1, label: "Inside" },
+      { id: "outside", row: 2, column: 2, label: "Outside" },
+    ],
+  }])[0];
+  deepStrictEqual(stored.matrixSize, 2);
+  deepStrictEqual(stored.matrixAxisLabels, {
+    left: "Left",
+    right: "Right",
+    bottom: "Bottom",
+    top: "Top",
+  });
+  deepStrictEqual(stored.matrixReferences?.map((reference) => reference.id), [
+    "inside",
+  ]);
+});
+
+Deno.test("matrix helpers, sanitization, and aggregation enforce cell bounds", () => {
+  const q = {
+    ...newQuestion("matrix_2x2"),
+    id: "matrix",
+    prompt: "Place it",
+    matrixSize: 4 as const,
+  };
+  const survey: Survey = {
+    id: "survey",
+    slug: "matrix",
+    title: "Matrix",
+    description: "",
+    resultsVisible: true,
+    acceptingResponses: true,
+    audienceFacets: false,
+    createdAt: "",
+    questions: [q],
+  };
+
+  deepStrictEqual(isMatrixAnswer({ row: 0, column: 3 }, 4), true);
+  deepStrictEqual(isMatrixAnswer({ row: 4, column: 0 }, 4), false);
+  deepStrictEqual(
+    referencesWithinSize([
+      { id: "a", row: 1, column: 1, label: "Inside" },
+      { id: "b", row: 4, column: 0, label: "Outside" },
+    ], 4).map((reference) => reference.id),
+    ["a"],
+  );
+  deepStrictEqual(
+    sanitizeAnswers(survey, { matrix: { row: 3, column: 2, extra: true } }),
+    {
+      matrix: { row: 3, column: 2 },
+    },
+  );
+  deepStrictEqual(
+    sanitizeAnswers(survey, { matrix: { row: 4, column: 2 } }),
+    {},
+  );
+  deepStrictEqual(sanitizeAnswers(survey, { matrix: [3, 2] }), {});
+
+  const aggregate = aggregateQuestion(q, [
+    { matrix: { row: 0, column: 0 } },
+    { matrix: { row: 0, column: 0 } },
+    { matrix: { row: 3, column: 2 } },
+    { matrix: { row: 9, column: 9 } },
+  ]);
+  deepStrictEqual(aggregate.responseCount, 3);
+  deepStrictEqual(aggregate.matrixCounts?.[matrixCellKey(0, 0)], 2);
+  deepStrictEqual(aggregate.matrixCounts?.[matrixCellKey(3, 2)], 1);
+  deepStrictEqual(Object.keys(aggregate.matrixCounts ?? {}).length, 16);
 });

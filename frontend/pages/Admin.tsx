@@ -475,6 +475,13 @@ export function Admin({ adminKey }: { adminKey: string }) {
             >
               + Emoji
             </button>
+            <button
+              onClick={() =>
+                setQuestions([...questions, newQuestion("matrix_2x2")])}
+              className="btn-add"
+            >
+              + 2×2 matrix
+            </button>
           </div>
           <style>
             {`.btn-add{background:#fff;border:1px dashed #a5b4fc;color:#4338ca;border-radius:.75rem;padding:.5rem .9rem;font-size:.875rem} .btn-add:hover{background:#eef2ff}`}

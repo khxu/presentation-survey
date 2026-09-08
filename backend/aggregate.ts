@@ -6,7 +6,11 @@ import type {
   QuestionAggregate,
   Survey,
 } from "../shared/types.ts";
-import { canonicalizeChoiceSelection } from "../shared/questions.ts";
+import {
+  canonicalizeChoiceSelection,
+  isMatrixAnswer,
+  matrixCellKey,
+} from "../shared/questions.ts";
 
 /** Instant-runoff voting: returns each round's tallies until a majority winner emerges. */
 export function instantRunoff(
@@ -174,6 +178,24 @@ export function aggregateQuestion(
       }
       agg.borda = borda;
       agg.firstChoice = first;
+      break;
+    }
+    case "matrix_2x2": {
+      const size = q.matrixSize ?? 2;
+      const counts: Record<string, number> = {};
+      for (let row = 0; row < size; row++) {
+        for (let column = 0; column < size; column++) {
+          counts[matrixCellKey(row, column)] = 0;
+        }
+      }
+      let validCount = 0;
+      for (const value of vals) {
+        if (!isMatrixAnswer(value, size)) continue;
+        counts[matrixCellKey(value.row, value.column)]++;
+        validCount++;
+      }
+      agg.responseCount = validCount;
+      agg.matrixCounts = counts;
       break;
     }
   }

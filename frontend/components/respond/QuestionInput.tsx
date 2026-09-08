@@ -1,6 +1,7 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
 import { useState } from "https://esm.sh/react@18.2.0";
 import type { AnswerValue, Question } from "../../../shared/types.ts";
+import { MatrixInput } from "./MatrixInput.tsx";
 
 interface Props {
   q: Question;
@@ -126,6 +127,9 @@ export function QuestionInput({ q, value, onChange }: Props) {
           onChange={onChange}
         />
       );
+
+    case "matrix_2x2":
+      return <MatrixInput q={q} value={value} onChange={onChange} />;
   }
 }
 
