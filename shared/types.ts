@@ -67,12 +67,19 @@ export interface IRVRound {
   winner: string | null;
 }
 
+export interface ChoiceIntersection {
+  optionIds: string[];
+  count: number;
+}
+
 export interface QuestionAggregate {
   questionId: string;
   type: QuestionType;
   responseCount: number;
   /** For choice/emoji: counts by optionId. */
   counts?: Record<string, number>;
+  /** For multi-choice: exact observed option combinations. */
+  intersections?: ChoiceIntersection[];
   /** For scale: counts by value, plus mean. */
   distribution?: Record<string, number>;
   mean?: number | null;
