@@ -1,6 +1,10 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
 import type { MatrixAnswer, Question } from "../../../shared/types.ts";
 import { isMatrixAnswer, matrixCellKey } from "../../../shared/questions.ts";
+import {
+  MatrixCellReferences,
+  matrixReferenceText,
+} from "../MatrixCellReferences.tsx";
 
 interface Props {
   q: Question;
@@ -38,9 +42,7 @@ export function MatrixInput({ q, value, onChange }: Props) {
             const on = selected?.row === row && selected.column === column;
             const middleTop = row === size / 2;
             const middleLeft = column === size / 2;
-            const referenceText = cellReferences.map((reference) =>
-              reference.label
-            ).join(", ");
+            const referenceText = matrixReferenceText(cellReferences);
             return (
               <button
                 type="button"
@@ -52,7 +54,8 @@ export function MatrixInput({ q, value, onChange }: Props) {
                 } of ${size} from top${
                   referenceText ? `. Reference items: ${referenceText}` : ""
                 }`}
-                className={`relative min-w-0 border-gray-200 p-1 text-left transition active:scale-95 ${
+                title={referenceText || undefined}
+                className={`relative min-w-0 overflow-hidden border-gray-200 p-1 text-left transition active:scale-95 ${
                   on
                     ? "z-10 bg-indigo-600 text-white ring-2 ring-inset ring-indigo-900"
                     : "hover:bg-indigo-50"
@@ -61,19 +64,16 @@ export function MatrixInput({ q, value, onChange }: Props) {
                 }`}
               >
                 {cellReferences.length > 0 && (
-                  <span
-                    className={`block truncate text-[9px] leading-tight sm:text-xs ${
+                  <MatrixCellReferences
+                    references={cellReferences}
+                    size={size}
+                    className={`text-[9px] leading-tight sm:text-xs ${
                       on ? "text-white" : "text-gray-600"
-                    }`}
-                  >
-                    {cellReferences[0].label}
-                    {cellReferences.length > 1
-                      ? ` +${cellReferences.length - 1}`
-                      : ""}
-                  </span>
+                    } ${on ? "pr-5" : ""}`}
+                  />
                 )}
                 {on && (
-                  <span className="absolute inset-0 flex items-center justify-center text-2xl font-bold">
+                  <span className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white text-sm font-bold text-indigo-700 shadow-sm">
                     ✓
                   </span>
                 )}

@@ -176,5 +176,5 @@ Val Town asset utility initialize without real credentials.
 ```sh
 VAL_TOWN_API_KEY=local-test-placeholder deno test --allow-import --allow-env=VAL_TOWN_API_KEY \
   --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/aggregate_test.ts backend/proposal-sql_test.ts \
-  frontend/lib/questionDraft_test.ts
+  frontend/lib/questionDraft_test.ts frontend/components/MatrixCellReferences_test.ts
 ```
