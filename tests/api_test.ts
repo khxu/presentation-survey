@@ -150,9 +150,13 @@ Deno.test("API: anonymous proposal, device votes, admin edits, responses, and cl
     );
 
     deepStrictEqual(
-      (await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
-        released: true,
-      })).status,
+      (await request(
+        `/api/admin/${adminKey}/questions/${q.id}/release`,
+        "PATCH",
+        {
+          released: true,
+        },
+      )).status,
       200,
     );
     const response = await request(`/api/s/${slug}/respond`, "POST", {
@@ -387,61 +391,106 @@ Deno.test("API: on-deck questions stay private and preserve answers across unrel
     const first = await request(`/api/s/${slug}`);
     const cookie = first.headers.get("set-cookie")!.split(";")[0];
     const publicPayload = await first.json();
-    deepStrictEqual(publicPayload.survey.questions.map((q: Question) => q.id), [released.id]);
+    deepStrictEqual(publicPayload.survey.questions.map((q: Question) => q.id), [
+      released.id,
+    ]);
     deepStrictEqual(publicPayload.survey.questions[0].position, 0);
 
     const forged = await request(`/api/s/${slug}/respond`, "POST", {
       answers: { [released.id]: "visible", [onDeck.id]: "forged" },
     }, cookie);
-    deepStrictEqual(await forged.json(), { ok: true, answers: { [released.id]: "visible" } });
+    deepStrictEqual(await forged.json(), {
+      ok: true,
+      answers: { [released.id]: "visible" },
+    });
 
     deepStrictEqual(
-      (await request(`/api/admin/${adminKey}/questions/${onDeck.id}/release`, "PATCH", {
-        released: true,
-      })).status,
+      (await request(
+        `/api/admin/${adminKey}/questions/${onDeck.id}/release`,
+        "PATCH",
+        {
+          released: true,
+        },
+      )).status,
       200,
     );
-    const bothVisible = await (await request(`/api/s/${slug}`, "GET", undefined, cookie)).json();
-    deepStrictEqual(bothVisible.survey.questions.map((q: Question) => q.id), [released.id, onDeck.id]);
+    const bothVisible =
+      await (await request(`/api/s/${slug}`, "GET", undefined, cookie)).json();
+    deepStrictEqual(bothVisible.survey.questions.map((q: Question) => q.id), [
+      released.id,
+      onDeck.id,
+    ]);
     deepStrictEqual(bothVisible.existing, { [released.id]: "visible" });
 
     await request(`/api/s/${slug}/respond`, "POST", {
-      answers: { [released.id]: "visible", [onDeck.id]: "saved while released" },
+      answers: {
+        [released.id]: "visible",
+        [onDeck.id]: "saved while released",
+      },
     }, cookie);
     deepStrictEqual(
-      (await request(`/api/admin/${adminKey}/questions/${onDeck.id}/release`, "PATCH", {
-        released: false,
-      })).status,
+      (await request(
+        `/api/admin/${adminKey}/questions/${onDeck.id}/release`,
+        "PATCH",
+        {
+          released: false,
+        },
+      )).status,
       200,
     );
     await request(`/api/s/${slug}/respond`, "POST", {
       answers: { [released.id]: "updated" },
     }, cookie);
 
-    const hiddenAgain = await (await request(`/api/s/${slug}`, "GET", undefined, cookie)).json();
+    const hiddenAgain =
+      await (await request(`/api/s/${slug}`, "GET", undefined, cookie)).json();
     deepStrictEqual(hiddenAgain.existing, { [released.id]: "updated" });
-    const publicResults = await (await request(`/api/s/${slug}/results`)).json();
-    deepStrictEqual(publicResults.survey.questions.map((q: Question) => q.id), [released.id]);
-    deepStrictEqual(publicResults.groups[0].aggregates.map((aggregate: any) => aggregate.questionId), [released.id]);
-    const adminResults = await (await request(`/api/admin/${adminKey}/results`)).json();
+    const publicResults = await (await request(`/api/s/${slug}/results`))
+      .json();
+    deepStrictEqual(publicResults.survey.questions.map((q: Question) => q.id), [
+      released.id,
+    ]);
     deepStrictEqual(
-      adminResults.groups[0].aggregates.map((aggregate: any) => aggregate.questionId),
+      publicResults.groups[0].aggregates.map((aggregate: any) =>
+        aggregate.questionId
+      ),
+      [released.id],
+    );
+    const adminResults = await (await request(`/api/admin/${adminKey}/results`))
+      .json();
+    deepStrictEqual(
+      adminResults.groups[0].aggregates.map((aggregate: any) =>
+        aggregate.questionId
+      ),
       [released.id, onDeck.id],
     );
 
-    await request(`/api/admin/${adminKey}/questions/${onDeck.id}/release`, "PATCH", { released: true });
-    const restored = await (await request(`/api/s/${slug}`, "GET", undefined, cookie)).json();
+    await request(
+      `/api/admin/${adminKey}/questions/${onDeck.id}/release`,
+      "PATCH",
+      { released: true },
+    );
+    const restored =
+      await (await request(`/api/s/${slug}`, "GET", undefined, cookie)).json();
     deepStrictEqual(restored.existing, {
       [released.id]: "updated",
       [onDeck.id]: "saved while released",
     });
 
     deepStrictEqual(
-      (await request(`/api/admin/${adminKey}/questions/missing/release`, "PATCH", { released: true })).status,
+      (await request(
+        `/api/admin/${adminKey}/questions/missing/release`,
+        "PATCH",
+        { released: true },
+      )).status,
       404,
     );
     deepStrictEqual(
-      (await request(`/api/admin/${adminKey}/questions/${released.id}/release`, "PATCH", { released: "yes" })).status,
+      (await request(
+        `/api/admin/${adminKey}/questions/${released.id}/release`,
+        "PATCH",
+        { released: "yes" },
+      )).status,
       400,
     );
   } finally {

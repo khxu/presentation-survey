@@ -20,8 +20,16 @@ interface Props {
 }
 
 const Toggle = ({ label, checked, onChange, hint }: any) => (
-  <label className="flex items-center gap-2 text-sm cursor-pointer select-none" title={hint}>
-    <input type="checkbox" checked={checked} onChange={(e: any) => onChange(e.target.checked)} className="w-4 h-4" />
+  <label
+    className="flex items-center gap-2 text-sm cursor-pointer select-none"
+    title={hint}
+  >
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(e: any) => onChange(e.target.checked)}
+      className="w-4 h-4"
+    />
     {label}
   </label>
 );
@@ -42,32 +50,65 @@ export function QuestionEditor({
 
   function changeType(type: QuestionType) {
     const fresh = newQuestion(type);
-    onChange({ ...fresh, id: q.id, prompt: q.prompt, isDemographic: q.isDemographic, required: q.required, released: q.released, hidden: q.hidden,
-      options: hasOptions(type) && hasOptions(q.type) && q.type !== "emoji_reaction" && type !== "emoji_reaction"
-        ? q.options
-        : fresh.options });
+    onChange({
+      ...fresh,
+      id: q.id,
+      prompt: q.prompt,
+      isDemographic: q.isDemographic,
+      required: q.required,
+      released: q.released,
+      hidden: q.hidden,
+      options:
+        hasOptions(type) && hasOptions(q.type) && q.type !== "emoji_reaction" &&
+          type !== "emoji_reaction"
+          ? q.options
+          : fresh.options,
+    });
   }
 
-  const canFacet = q.type === "single_choice" || q.type === "multi_choice" || q.type === "scale" ||
+  const canFacet = q.type === "single_choice" || q.type === "multi_choice" ||
+    q.type === "scale" ||
     q.type === "emoji_reaction";
 
   return (
-    <div className={`bg-white rounded-xl shadow p-4 border-l-4 ${q.isDemographic ? "border-amber-400" : "border-indigo-400"}`}>
+    <div
+      className={`bg-white rounded-xl shadow p-4 border-l-4 ${
+        q.isDemographic ? "border-amber-400" : "border-indigo-400"
+      }`}
+    >
       <div className="flex items-start gap-3">
-        {onMove && <div className="flex flex-col gap-1 text-gray-400">
-          <button onClick={() => onMove(-1)} disabled={index === 0} className="hover:text-gray-700 disabled:opacity-20">▲</button>
-          <span className="text-xs text-center font-mono">{index + 1}</span>
-          <button onClick={() => onMove(1)} disabled={index === total - 1} className="hover:text-gray-700 disabled:opacity-20">▼</button>
-        </div>}
+        {onMove && (
+          <div className="flex flex-col gap-1 text-gray-400">
+            <button
+              onClick={() => onMove(-1)}
+              disabled={index === 0}
+              className="hover:text-gray-700 disabled:opacity-20"
+            >
+              ▲
+            </button>
+            <span className="text-xs text-center font-mono">{index + 1}</span>
+            <button
+              onClick={() => onMove(1)}
+              disabled={index === total - 1}
+              className="hover:text-gray-700 disabled:opacity-20"
+            >
+              ▼
+            </button>
+          </div>
+        )}
         <div className="flex-1 space-y-3">
           {!participant && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span
                 className={`rounded-full px-2.5 py-1 font-semibold ${
-                  published && q.released ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"
+                  published && q.released
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-amber-100 text-amber-800"
                 }`}
               >
-                {published ? (q.released ? "Released" : "On deck") : "On deck after save"}
+                {published
+                  ? (q.released ? "Released" : "On deck")
+                  : "On deck after save"}
               </span>
               {published && onReleaseChange && (
                 <button
@@ -80,7 +121,11 @@ export function QuestionEditor({
                       : "bg-emerald-600 text-white hover:bg-emerald-700"
                   }`}
                 >
-                  {releasing ? "Updating..." : q.released ? "Move on deck" : "Release to audience"}
+                  {releasing
+                    ? "Updating..."
+                    : q.released
+                    ? "Move on deck"
+                    : "Release to audience"}
                 </button>
               )}
             </div>
@@ -92,21 +137,41 @@ export function QuestionEditor({
               onChange={(e: any) => changeType(e.target.value)}
               className="border rounded-lg px-2 py-1.5 text-sm bg-gray-50"
             >
-              {Object.entries(QUESTION_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.entries(QUESTION_TYPE_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
             </select>
-            {!participant && <div className="flex gap-3 flex-wrap items-center ml-auto">
-              <Toggle label="Required" checked={q.required} onChange={(v: boolean) => set({ required: v })} />
-              {canFacet && (
+            {!participant && (
+              <div className="flex gap-3 flex-wrap items-center ml-auto">
                 <Toggle
-                  label="Demographic"
-                  hint="Use this question to group other results"
-                  checked={q.isDemographic}
-                  onChange={(v: boolean) => set({ isDemographic: v })}
+                  label="Required"
+                  checked={q.required}
+                  onChange={(v: boolean) => set({ required: v })}
                 />
-              )}
-              <Toggle label="Hide results" hint="Never show this question's results to the audience" checked={q.hidden} onChange={(v: boolean) => set({ hidden: v })} />
-              {onDelete && <button onClick={onDelete} className="text-red-500 hover:text-red-700 text-sm">🗑</button>}
-            </div>}
+                {canFacet && (
+                  <Toggle
+                    label="Demographic"
+                    hint="Use this question to group other results"
+                    checked={q.isDemographic}
+                    onChange={(v: boolean) => set({ isDemographic: v })}
+                  />
+                )}
+                <Toggle
+                  label="Hide results"
+                  hint="Never show this question's results to the audience"
+                  checked={q.hidden}
+                  onChange={(v: boolean) => set({ hidden: v })}
+                />
+                {onDelete && (
+                  <button
+                    onClick={onDelete}
+                    className="text-red-500 hover:text-red-700 text-sm"
+                  >
+                    🗑
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <input
@@ -122,18 +187,31 @@ export function QuestionEditor({
             <div className="space-y-1.5">
               {q.options.map((o, i) => (
                 <div key={o.id} className="flex items-center gap-2">
-                  <span className="text-gray-400 text-sm w-5 text-right">{q.type === "ranked_choice" ? "≡" : i + 1}</span>
+                  <span className="text-gray-400 text-sm w-5 text-right">
+                    {q.type === "ranked_choice" ? "≡" : i + 1}
+                  </span>
                   <input
                     value={o.label}
                     aria-label={`Option ${i + 1}`}
                     maxLength={QUESTION_LIMITS.optionLabel}
                     onChange={(e: any) =>
-                      set({ options: q.options.map((x) => x.id === o.id ? { ...x, label: e.target.value } : x) })}
-                    placeholder={q.type === "emoji_reaction" ? "emoji" : `Option ${i + 1}`}
+                      set({
+                        options: q.options.map((x) =>
+                          x.id === o.id ? { ...x, label: e.target.value } : x
+                        ),
+                      })}
+                    placeholder={q.type === "emoji_reaction"
+                      ? "emoji"
+                      : `Option ${i + 1}`}
                     className="flex-1 border rounded-lg px-3 py-1.5 text-sm"
                   />
                   <button
-                    onClick={() => set({ options: q.options.filter((x) => x.id !== o.id) })}
+                    onClick={() =>
+                      set({
+                        options: q.options.filter((x) =>
+                          x.id !== o.id
+                        ),
+                      })}
                     className="text-gray-400 hover:text-red-500"
                   >
                     ×
@@ -141,7 +219,8 @@ export function QuestionEditor({
                 </div>
               ))}
               <button
-                onClick={() => set({ options: [...q.options, { id: uid(), label: "" }] })}
+                onClick={() =>
+                  set({ options: [...q.options, { id: uid(), label: "" }] })}
                 disabled={q.options.length >= QUESTION_LIMITS.options}
                 className="text-sm text-indigo-600 hover:underline ml-7"
               >
@@ -152,9 +231,29 @@ export function QuestionEditor({
 
           {q.type === "scale" && (
             <div className="flex gap-4 items-center text-sm">
-              <label>Min <input type="number" value={q.scaleMin ?? 1} onChange={(e: any) => set({ scaleMin: Number(e.target.value) })} className="w-16 border rounded px-2 py-1 ml-1" /></label>
-              <label>Max <input type="number" value={q.scaleMax ?? 5} onChange={(e: any) => set({ scaleMax: Number(e.target.value) })} className="w-16 border rounded px-2 py-1 ml-1" /></label>
-              <span className="text-gray-400">(e.g. 1–5, 1–10, or 0–10 for NPS)</span>
+              <label>
+                Min{" "}
+                <input
+                  type="number"
+                  value={q.scaleMin ?? 1}
+                  onChange={(e: any) =>
+                    set({ scaleMin: Number(e.target.value) })}
+                  className="w-16 border rounded px-2 py-1 ml-1"
+                />
+              </label>
+              <label>
+                Max{" "}
+                <input
+                  type="number"
+                  value={q.scaleMax ?? 5}
+                  onChange={(e: any) =>
+                    set({ scaleMax: Number(e.target.value) })}
+                  className="w-16 border rounded px-2 py-1 ml-1"
+                />
+              </label>
+              <span className="text-gray-400">
+                (e.g. 1–5, 1–10, or 0–10 for NPS)
+              </span>
             </div>
           )}
         </div>

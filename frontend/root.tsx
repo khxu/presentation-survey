@@ -9,10 +9,17 @@ export function Root() {
       <html lang="en">
         <head>
           <meta charSet="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+          />
           <title>Audience Survey</title>
           <script src="https://cdn.twind.style" crossOrigin="" />
-          <link rel="icon" href={immutableFileUrl("/frontend/favicon.svg")} type="image/svg+xml" />
+          <link
+            rel="icon"
+            href={immutableFileUrl("/frontend/favicon.svg")}
+            type="image/svg+xml"
+          />
         </head>
         <body className="font-sans text-gray-800 bg-gradient-to-br from-slate-50 to-indigo-50 min-h-screen">
           <div id="root" />

@@ -106,7 +106,10 @@ function UpSetPanel({
             minWidth: LABEL_WIDTH + intersections.length * COLUMN_WIDTH,
           }}
         >
-          <div className="sticky left-0 z-10 shrink-0 bg-white" style={{ width: LABEL_WIDTH }}>
+          <div
+            className="sticky left-0 z-10 shrink-0 bg-white"
+            style={{ width: LABEL_WIDTH }}
+          >
             <div
               className="flex items-end justify-end pb-2 pr-2 text-[10px] uppercase tracking-wide text-gray-400"
               style={{ height: BAR_HEIGHT }}
