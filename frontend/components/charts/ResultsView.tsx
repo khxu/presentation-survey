@@ -15,6 +15,7 @@ import {
   WordCloudChart,
 } from "./Charts.tsx";
 import { MatrixHeatmap } from "./MatrixHeatmap.tsx";
+import { UpSetChart } from "./UpSetChart.tsx";
 
 interface Props {
   fetcher: (groupBy: string | null) => Promise<ResultsPayload>;
@@ -228,7 +229,9 @@ function QuestionCard(
   );
   return (
     <div
-      className={`bg-white rounded-2xl shadow p-5 ${big ? "min-h-[60vh]" : ""}`}
+      className={`min-w-0 bg-white rounded-2xl shadow p-5 ${
+        big ? "min-h-[60vh]" : ""
+      }`}
     >
       <div className="flex items-start gap-3 mb-3">
         <span className="text-xs font-mono bg-gray-100 text-gray-500 rounded px-1.5 py-0.5 mt-1">
@@ -251,9 +254,10 @@ function QuestionCard(
 function Chart({ q, groups }: { q: Question; groups: FacetGroup[] }) {
   switch (q.type) {
     case "single_choice":
-    case "multi_choice":
     case "emoji_reaction":
       return <ChoiceChart q={q} groups={groups} />;
+    case "multi_choice":
+      return <MultiChoiceChart q={q} groups={groups} />;
     case "scale":
       return <ScaleChart q={q} groups={groups} />;
     case "ranked_choice":
@@ -265,4 +269,47 @@ function Chart({ q, groups }: { q: Question; groups: FacetGroup[] }) {
     case "matrix_2x2":
       return <MatrixHeatmap q={q} groups={groups} />;
   }
+}
+
+function MultiChoiceChart(
+  { q, groups }: { q: Question; groups: FacetGroup[] },
+) {
+  const [mode, setMode] = useState<"intersections" | "totals">("intersections");
+  return (
+    <div className="min-w-0 w-full">
+      <div
+        className="flex justify-end gap-1 mb-3 text-xs"
+        role="group"
+        aria-label="Pick-many result view"
+      >
+        <button
+          type="button"
+          aria-pressed={mode === "intersections"}
+          onClick={() => setMode("intersections")}
+          className={`px-2.5 py-1 rounded-full border ${
+            mode === "intersections"
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : "bg-white"
+          }`}
+        >
+          Intersections
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === "totals"}
+          onClick={() => setMode("totals")}
+          className={`px-2.5 py-1 rounded-full border ${
+            mode === "totals"
+              ? "bg-indigo-600 text-white border-indigo-600"
+              : "bg-white"
+          }`}
+        >
+          Option totals
+        </button>
+      </div>
+      {mode === "intersections"
+        ? <UpSetChart q={q} groups={groups} />
+        : <ChoiceChart q={q} groups={groups} />}
+    </div>
+  );
 }

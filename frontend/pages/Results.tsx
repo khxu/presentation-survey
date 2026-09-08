@@ -23,9 +23,17 @@ export function Results({ slug }: { slug: string }) {
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="flex items-center gap-4 mb-6">
         <h1 className="text-3xl md:text-4xl font-extrabold flex-1">{title}</h1>
-        <a href={`/s/${slug}`} className="text-sm text-indigo-600 hover:underline">← answer the survey</a>
+        <a
+          href={`/s/${slug}`}
+          className="text-sm text-indigo-600 hover:underline"
+        >
+          ← answer the survey
+        </a>
       </div>
-      <ResultsView fetcher={(g) => api.publicResults(slug, g)} canFacet={canFacet} />
+      <ResultsView
+        fetcher={(g) => api.publicResults(slug, g)}
+        canFacet={canFacet}
+      />
     </div>
   );
 }

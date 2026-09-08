@@ -6,7 +6,11 @@ import type {
   QuestionAggregate,
   Survey,
 } from "../shared/types.ts";
-import { isMatrixAnswer, matrixCellKey } from "../shared/questions.ts";
+import {
+  canonicalizeChoiceSelection,
+  isMatrixAnswer,
+  matrixCellKey,
+} from "../shared/questions.ts";
 
 /** Instant-runoff voting: returns each round's tallies until a majority winner emerges. */
 export function instantRunoff(
@@ -84,14 +88,39 @@ export function aggregateQuestion(
     case "multi_choice": {
       const counts: Record<string, number> = {};
       for (const o of q.options) counts[o.id] = 0;
+      const combinations = new Map<
+        string,
+        { optionIds: string[]; count: number }
+      >();
+      let responseCount = 0;
       for (const v of vals) {
-        if (Array.isArray(v)) {
-          for (const x of v) {
-            if (x in counts) counts[x]++;
-          }
-        }
+        const optionIds = canonicalizeChoiceSelection(q.options, v);
+        if (!optionIds) continue;
+        responseCount++;
+        for (const id of optionIds) counts[id]++;
+        const key = JSON.stringify(optionIds);
+        const combination = combinations.get(key);
+        if (combination) combination.count++;
+        else combinations.set(key, { optionIds, count: 1 });
       }
+      const optionIndex = new Map(
+        q.options.map((option, index) => [option.id, index]),
+      );
+      const compareOptionIds = (a: string[], b: string[]) => {
+        if (a.length === 0 || b.length === 0) {
+          return a.length === b.length ? 0 : a.length === 0 ? 1 : -1;
+        }
+        for (let i = 0; i < Math.min(a.length, b.length); i++) {
+          const difference = optionIndex.get(a[i])! - optionIndex.get(b[i])!;
+          if (difference) return difference;
+        }
+        return a.length - b.length;
+      };
       agg.counts = counts;
+      agg.intersections = [...combinations.values()].sort((a, b) =>
+        b.count - a.count || compareOptionIds(a.optionIds, b.optionIds)
+      );
+      agg.responseCount = responseCount;
       break;
     }
     case "scale": {

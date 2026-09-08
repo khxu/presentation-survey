@@ -1,5 +1,6 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
 import {
+  canonicalizeChoiceSelection,
   isMatrixAnswer,
   normalizeStoredQuestions,
 } from "../shared/questions.ts";
@@ -291,8 +292,9 @@ export function sanitizeAnswers(survey: Survey, raw: unknown): Answers {
         if (typeof v === "string" && optIds.has(v)) out[q.id] = v;
         break;
       case "multi_choice":
-        if (Array.isArray(v)) {
-          out[q.id] = v.filter((x) => typeof x === "string" && optIds.has(x));
+        {
+          const selected = canonicalizeChoiceSelection(q.options, v);
+          if (selected) out[q.id] = selected;
         }
         break;
       case "ranked_choice":

@@ -4,6 +4,7 @@ import type {
   MatrixAxisLabels,
   MatrixReference,
   MatrixSize,
+  Option,
   Question,
   QuestionDraft,
   QuestionType,
@@ -29,6 +30,19 @@ export const DEFAULT_MATRIX_AXIS_LABELS: MatrixAxisLabels = {
 };
 
 export class QuestionValidationError extends Error {}
+
+export function canonicalizeChoiceSelection(
+  options: Option[],
+  raw: unknown,
+): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const selected = new Set(
+    raw.filter((value): value is string => typeof value === "string"),
+  );
+  return options.filter((option) => selected.has(option.id)).map((option) =>
+    option.id
+  );
+}
 
 export function newQuestion(type: QuestionType = "single_choice"): Question {
   return {

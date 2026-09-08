@@ -60,7 +60,8 @@ are limited to 16 KB.
 
 | Type                                | Respondent sees                                                                           | Results visualization                                                                                                                     |
 | ----------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Multiple choice (one / many)        | Tappable cards                                                                            | Colored bar chart; grouped bars when faceted                                                                                              |
+| Multiple choice (one)               | Tappable cards                                                                            | Colored bar chart; grouped bars when faceted                                                                                              |
+| Multiple choice (many)              | Tappable cards                                                                            | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
 | Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                               | Heat-colored histogram + animated mean                                                                                                    |
 | **Ranked choice**                   | Tap-to-rank list with reorder                                                             | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
 | Word cloud                          | Single word/phrase                                                                        | Sized, tilted word cloud                                                                                                                  |
@@ -141,7 +142,7 @@ moved back on deck, its stored answers remain available if it is released again.
 index.ts                       Hono server: shell routes, public + admin API, QR SVG
 backend/db.ts                  SQLite schema, hashing, random ids
 backend/surveys.ts             CRUD, response upsert, answer sanitization
-backend/aggregate.ts           per-type aggregation, instant-runoff, facet bucketing
+backend/aggregate.ts           per-type aggregation, pick-many intersections, instant-runoff, facet bucketing
 backend/proposals.ts           proposal normalization, queries, approval workflow
 backend/proposal-sql.ts        proposal/vote schema and atomic mutation statements
 backend/errors.ts              expected API error types
@@ -174,6 +175,6 @@ Val Town asset utility initialize without real credentials.
 
 ```sh
 VAL_TOWN_API_KEY=local-test-placeholder deno test --allow-import --allow-env=VAL_TOWN_API_KEY \
-  --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/proposal-sql_test.ts \
+  --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/aggregate_test.ts backend/proposal-sql_test.ts \
   frontend/lib/questionDraft_test.ts
 ```

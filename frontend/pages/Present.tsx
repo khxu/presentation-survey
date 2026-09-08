@@ -13,14 +13,22 @@ export function Present({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-8 py-12 text-center">
-      <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-8">{title || "Join the survey"}</h1>
+      <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-8">
+        {title || "Join the survey"}
+      </h1>
       <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-10">
-        <img src={`/api/s/${slug}/qr.svg`} alt="QR code" className="w-[min(60vw,480px)] h-auto" />
+        <img
+          src={`/api/s/${slug}/qr.svg`}
+          alt="QR code"
+          className="w-[min(60vw,480px)] h-auto"
+        />
       </div>
       <p className="mt-8 text-2xl md:text-4xl font-mono text-indigo-700 break-all">
         {joinUrl.replace(/^https?:\/\//, "")}
       </p>
-      <p className="mt-4 text-gray-500 text-lg">Scan or type the link · no login needed</p>
+      <p className="mt-4 text-gray-500 text-lg">
+        Scan or type the link · no login needed
+      </p>
     </div>
   );
 }
