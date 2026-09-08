@@ -118,9 +118,11 @@ Deno.test("API: anonymous proposal, device votes, admin edits, responses, and cl
       },
     );
     deepStrictEqual(approved.status, 200);
-    const fresh: Survey = (await approved.json()).survey;
+    const approvedPayload = await approved.json();
+    const fresh: Survey = approvedPayload.survey;
     deepStrictEqual(fresh.questions.length, 1);
     const q = fresh.questions[0];
+    deepStrictEqual(approvedPayload.approvedQuestion, q);
     deepStrictEqual([q.prompt, q.required, q.isDemographic, q.position], [
       "Edited by the presenter",
       false,
@@ -297,6 +299,42 @@ Deno.test("API: concurrent approvals append once and stale builder saves cannot 
     });
     deepStrictEqual(saved.status, 200);
     deepStrictEqual((await saved.json()).survey.questions, edited);
+  } finally {
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
+
+Deno.test("API: approval returns the persisted appended question", async () => {
+  const { slug, adminKey } = await create();
+  try {
+    const initial: Question = {
+      id: "initial-question",
+      position: 0,
+      type: "single_choice",
+      prompt: choice.prompt,
+      options: choice.options,
+      required: choice.required,
+      hidden: false,
+      isDemographic: false,
+    };
+    deepStrictEqual(
+      (await request(`/api/admin/${adminKey}`, "PATCH", {
+        questions: [initial],
+        expectedQuestions: [],
+      })).status,
+      200,
+    );
+    await request(`/api/s/${slug}/proposals`, "POST", { question: choice });
+    const proposal = (await proposals(slug)).proposals[0];
+    const response = await request(
+      `/api/admin/${adminKey}/proposals/${proposal.id}/approve`,
+      "POST",
+      { question: proposal.draft },
+    );
+    deepStrictEqual(response.status, 200);
+    const payload = await response.json();
+    deepStrictEqual(payload.approvedQuestion, payload.survey.questions[1]);
+    deepStrictEqual(payload.approvedQuestion.position, 1);
   } finally {
     await request(`/api/admin/${adminKey}`, "DELETE");
   }

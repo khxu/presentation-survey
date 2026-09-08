@@ -7,7 +7,7 @@ Live polling for talks. Show a QR code, let the room answer on their phones with
 ## How a talk goes
 
 1. **Create** — hit the homepage, name your survey. You get a **secret admin link** (bookmark it — it's the only way back).
-2. **Build** — add questions. Mark ones like *"What's your profession?"* as **Demographic** so you can group everything else by them later.
+2. **Build** — add and edit questions as a private draft, then click **Save questions** to publish them to respondents. Mark ones like *"What's your profession?"* as **Demographic** so you can group everything else by them later.
 3. **Share** — put the fullscreen **join slide** (`/s/<slug>/present`) on the projector. It shows a big QR code + short URL.
 4. **Collect** — the audience answers one question per screen. Each phone gets a cookie so answers are one-per-device and editable; no accounts.
 5. **Reveal** — flip **Show results to audience**. Open `/s/<slug>/results` on the projector; it live-updates every 3s. Use **Group by** to split every chart by a demographic question, or click a group chip to isolate it.
@@ -36,6 +36,7 @@ Proposal prompts are limited to 500 characters. Choice questions require 2–20 
 
 ## Admin controls
 
+- **Save questions** — publish question additions, edits, deletions, and reordering after reviewing the draft; respondents continue seeing the last saved version until then
 - **Accepting responses** — close the survey when you move on
 - **Show results to audience** — survey-wide reveal toggle
 - **Hide results** (per question) — keeps a question out of the audience view even when results are on
@@ -66,7 +67,7 @@ graph LR
 
 **Security model:** the admin key is a 28-char random token stored only as a SHA-256 hash. Respondents are identified by an `HttpOnly` cookie; clearing it or switching devices allows a second response or another proposal vote (acceptable trade-off for a login-free live poll — a "welcome back" banner nudges returning devices to edit instead). Public proposal payloads never expose device identifiers. Votes are unique per device and proposal, not per verified person; this is not strong abuse prevention.
 
-Approval claims the pending proposal and appends its question in a single SQLite write transaction. Question-builder saves compare their last saved question snapshot to prevent stale tabs from overwriting an approval; conflicts retain local edits and offer a reload rather than silently losing questions.
+Approval claims the pending proposal and appends its question in a single SQLite write transaction, so **Approve and add question** remains an immediate publish action. Regular builder edits stay local until **Save questions** is clicked. Saves compare their last published question snapshot to prevent stale tabs from overwriting an approval; conflicts retain local edits and offer a reload rather than silently losing questions.
 
 ## Files
 
@@ -103,5 +104,6 @@ The tests use Deno's built-in runner and real in-memory SQLite through `node:sql
 
 ```sh
 VAL_TOWN_API_KEY=local-test-placeholder deno test --allow-import --allow-env=VAL_TOWN_API_KEY \
-  --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/proposal-sql_test.ts
+  --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/proposal-sql_test.ts \
+  frontend/lib/questionDraft_test.ts
 ```

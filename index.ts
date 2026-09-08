@@ -175,8 +175,11 @@ admin.get("/proposals", async (c) => {
 admin.post("/proposals/:proposalId/approve", proposalBodyLimit, async (c) => {
   const survey = c.get("survey" as never) as Survey;
   const body = await questionBody(c.req.raw);
-  await approveProposal(survey.id, c.req.param("proposalId"), body.question);
-  return c.json({ survey: await getSurveyBySlug(survey.slug) });
+  const approvedQuestion = await approveProposal(survey.id, c.req.param("proposalId"), body.question);
+  const fresh = await getSurveyBySlug(survey.slug);
+  const publishedQuestion = fresh?.questions.find((question) => question.id === approvedQuestion.id);
+  if (!fresh || !publishedQuestion) throw new Error("Approved question was not added to the survey.");
+  return c.json({ survey: fresh, approvedQuestion: publishedQuestion });
 });
 
 admin.get("/results", async (c) => {

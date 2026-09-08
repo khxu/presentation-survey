@@ -68,7 +68,7 @@ export const api = {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question }),
-      }).then((r) => j<{ survey: Survey }>(r)),
+      }).then((r) => j<{ survey: Survey; approvedQuestion: Question }>(r)),
     results: (key: string, groupBy: string | null, includeHidden = true) =>
       fetch(
         `/api/admin/${key}/results?includeHidden=${includeHidden ? 1 : 0}${groupBy ? `&groupBy=${groupBy}` : ""}`,

@@ -1,4 +1,4 @@
-import type { QuestionProposal } from "../shared/types.ts";
+import type { Question, QuestionProposal } from "../shared/types.ts";
 import {
   normalizeApprovedQuestion,
   normalizeDraft,
@@ -65,7 +65,7 @@ export async function approveProposal(
   surveyId: string,
   proposalId: string,
   raw: unknown,
-): Promise<void> {
+): Promise<Question> {
   const question = normalizeApprovedQuestion(raw);
   await ensureSchema();
   const [claim] = await sqlite.batch(
@@ -78,4 +78,5 @@ export async function approveProposal(
       409,
     );
   }
+  return question;
 }
