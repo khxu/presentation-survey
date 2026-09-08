@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
 import type { Question, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
+import { mergePublishedQuestion, questionsEqual } from "../lib/questionDraft.ts";
 import { newQuestion, QuestionEditor } from "../components/builder/QuestionEditor.tsx";
 import { ResultsView } from "../components/charts/ResultsView.tsx";
 import { ProposalReview } from "../components/proposals/ProposalReview.tsx";
@@ -14,16 +15,21 @@ export function Admin({ adminKey }: { adminKey: string }) {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(location.search.includes("new=1") ? "share" : "build");
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
+  const [savedQuestions, setSavedQuestions] = useState<Question[]>([]);
+  const [draftQuestions, setDraftQuestions] = useState<Question[]>([]);
+  const [questionSaveStatus, setQuestionSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [questionError, setQuestionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [approving, setApproving] = useState(false);
   const saveTimer = useRef<number | null>(null);
-  const savedQuestions = useRef<Question[]>([]);
   const pendingPatch = useRef<Partial<Survey>>({});
   const inFlight = useRef<Promise<void> | null>(null);
+  const questionsDirty = !questionsEqual(draftQuestions, savedQuestions);
 
   useEffect(() => {
     api.admin.get(adminKey).then((d) => {
-      savedQuestions.current = d.survey.questions;
+      setSavedQuestions(d.survey.questions);
+      setDraftQuestions(d.survey.questions);
       setSurvey(d.survey);
       setTotal(d.totalResponses);
     }).catch((e) =>
@@ -34,7 +40,17 @@ export function Admin({ adminKey }: { adminKey: string }) {
     };
   }, [adminKey]);
 
-  // Merge debounced fields and serialize writes before publishing an approved question.
+  useEffect(() => {
+    if (!questionsDirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [questionsDirty]);
+
+  // Merge debounced metadata fields and serialize writes.
   async function flush() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (inFlight.current) return await inFlight.current;
@@ -43,11 +59,7 @@ export function Admin({ adminKey }: { adminKey: string }) {
         const patch = pendingPatch.current;
         pendingPatch.current = {};
         try {
-          const { survey: fresh } = await api.admin.patch(adminKey, {
-            ...patch,
-            ...(patch.questions ? { expectedQuestions: savedQuestions.current } : {}),
-          });
-          if (patch.questions || !pendingPatch.current.questions) savedQuestions.current = fresh.questions;
+          const { survey: fresh } = await api.admin.patch(adminKey, patch);
           setSurvey({ ...fresh, ...pendingPatch.current });
         } catch (error) {
           pendingPatch.current = { ...patch, ...pendingPatch.current };
@@ -86,6 +98,37 @@ export function Admin({ adminKey }: { adminKey: string }) {
     await flush().catch(saveError);
   }
 
+  function editQuestions(questions: Question[]) {
+    setDraftQuestions(questions);
+    setQuestionSaveStatus("idle");
+  }
+
+  async function saveQuestions() {
+    if (!questionsDirty || questionSaveStatus === "saving") return;
+    setQuestionSaveStatus("saving");
+    setQuestionError(null);
+    try {
+      await flush();
+    } catch (error) {
+      saveError(error);
+      setQuestionSaveStatus("idle");
+      return;
+    }
+    try {
+      const { survey: fresh } = await api.admin.patch(adminKey, {
+        questions: draftQuestions,
+        expectedQuestions: savedQuestions,
+      });
+      setSavedQuestions(fresh.questions);
+      setDraftQuestions(fresh.questions);
+      setSurvey(fresh);
+      setQuestionSaveStatus("saved");
+    } catch (error) {
+      setQuestionSaveStatus("idle");
+      setQuestionError(error instanceof Error ? error.message : "Could not save questions.");
+    }
+  }
+
   async function approve(proposalId: string, question: Question) {
     setApproving(true);
     try {
@@ -95,8 +138,11 @@ export function Admin({ adminKey }: { adminKey: string }) {
         saveError(error);
         throw error;
       }
-      const { survey: fresh } = await api.admin.approveProposal(adminKey, proposalId, question);
-      savedQuestions.current = fresh.questions;
+      const { survey: fresh, approvedQuestion } = await api.admin.approveProposal(adminKey, proposalId, question);
+      setSavedQuestions(questionsDirty ? mergePublishedQuestion(savedQuestions, approvedQuestion) : fresh.questions);
+      setDraftQuestions(questionsDirty ? mergePublishedQuestion(draftQuestions, approvedQuestion) : fresh.questions);
+      setQuestionSaveStatus(questionsDirty ? "idle" : "saved");
+      setQuestionError(null);
       setSurvey(fresh);
     } finally {
       setApproving(false);
@@ -126,11 +172,14 @@ export function Admin({ adminKey }: { adminKey: string }) {
     setTimeout(() => setCopied(false), 1200);
   };
 
-  const questions = survey.questions;
-  const setQuestions = (qs: Question[]) => edit({ questions: qs });
+  const questions = draftQuestions;
+  const setQuestions = editQuestions;
 
   return (
-    <fieldset disabled={approving} className="min-w-0 max-w-4xl mx-auto px-4 py-8">
+    <fieldset
+      disabled={approving || questionSaveStatus === "saving"}
+      className="min-w-0 max-w-4xl mx-auto px-4 py-8"
+    >
       {error && (
         <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">
           <p>{error} Your unsaved edits are still shown.</p>
@@ -210,6 +259,41 @@ export function Admin({ adminKey }: { adminKey: string }) {
             💡 Mark questions like “What's your profession?” as <span className="text-amber-600 font-semibold">Demographic</span> to
             group every other answer by them on the results screen.
           </p>
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-52">
+              <p className={`text-sm font-semibold ${questionsDirty ? "text-amber-700" : "text-emerald-700"}`}>
+                {questionsDirty ? "Unsaved question changes" : "Questions are saved"}
+              </p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                Respondents see only the last saved version of the question list.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void saveQuestions()}
+              disabled={!questionsDirty || questionSaveStatus === "saving"}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-semibold px-5 py-2.5 rounded-lg"
+            >
+              {questionSaveStatus === "saving"
+                ? "Saving..."
+                : questionsDirty
+                ? "Save questions"
+                : questionSaveStatus === "saved"
+                ? "Questions saved ✓"
+                : "Save questions"}
+            </button>
+          </div>
+          {questionError && (
+            <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
+              <p>{questionError} Your unsaved question changes are still shown.</p>
+              <div className="flex flex-wrap gap-4 mt-2">
+                <button type="button" onClick={() => void saveQuestions()} className="underline">Retry save</button>
+                <button type="button" onClick={() => location.reload()} className="underline">
+                  Reload saved version (discard local edits)
+                </button>
+              </div>
+            </div>
+          )}
           {questions.map((q, i) => (
             <QuestionEditor
               key={q.id}
