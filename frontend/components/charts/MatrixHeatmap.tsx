@@ -1,6 +1,10 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
 import type { FacetGroup, Question } from "../../../shared/types.ts";
 import { matrixCellKey } from "../../../shared/questions.ts";
+import {
+  MatrixCellReferences,
+  matrixReferenceText,
+} from "../MatrixCellReferences.tsx";
 import { PALETTE } from "./Charts.tsx";
 
 export function MatrixHeatmap(
@@ -73,39 +77,41 @@ function GroupHeatmap(
           const cellReferences = references.filter((reference) =>
             reference.row === row && reference.column === column
           );
+          const referenceText = matrixReferenceText(cellReferences);
           const middleTop = row === size / 2;
           const middleLeft = column === size / 2;
           return (
             <div
               key={key}
-              title={`${count} response${count === 1 ? "" : "s"} (${percent}%)`}
-              className={`relative min-w-0 border-gray-200 p-1 ${
+              title={`${count} response${count === 1 ? "" : "s"} (${percent}%)${
+                referenceText ? `. Reference items: ${referenceText}` : ""
+              }`}
+              className={`relative min-w-0 overflow-hidden border-gray-200 p-1 ${
                 middleTop ? "border-t-2 border-t-gray-500" : "border-t"
               } ${middleLeft ? "border-l-2 border-l-gray-500" : "border-l"}`}
               style={{
                 backgroundColor: colorWithAlpha(color, 0.08 + intensity * 0.78),
               }}
             >
-              <div className="flex h-full flex-col items-center justify-center text-center">
-                <span
-                  className={`font-black leading-none ${
-                    size === 6 ? "text-sm sm:text-lg" : "text-2xl sm:text-3xl"
-                  }`}
-                >
-                  {count}
-                </span>
-                <span className="mt-0.5 text-[9px] font-semibold sm:text-xs">
-                  {percent}%
-                </span>
+              <div className="flex h-full min-h-0 flex-col text-center">
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+                  <span
+                    className={`font-black leading-none ${
+                      size === 6 ? "text-sm sm:text-lg" : "text-2xl sm:text-3xl"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                  <span className="mt-0.5 text-[9px] font-semibold sm:text-xs">
+                    {percent}%
+                  </span>
+                </div>
+                <MatrixCellReferences
+                  references={cellReferences}
+                  size={size}
+                  className="mt-1 shrink-0 text-[8px] leading-tight text-gray-800 sm:text-[10px]"
+                />
               </div>
-              {cellReferences.length > 0 && (
-                <span className="absolute inset-x-1 bottom-1 truncate text-center text-[8px] leading-tight text-gray-800 sm:text-[10px]">
-                  {cellReferences[0].label}
-                  {cellReferences.length > 1
-                    ? ` +${cellReferences.length - 1}`
-                    : ""}
-                </span>
-              )}
             </div>
           );
         })}

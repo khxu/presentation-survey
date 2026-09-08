@@ -8,6 +8,10 @@ import {
   referencesWithinSize,
 } from "../../../shared/questions.ts";
 import { uid } from "../../lib/api.ts";
+import {
+  MatrixCellReferences,
+  matrixReferenceText,
+} from "../MatrixCellReferences.tsx";
 
 interface Props {
   q: Question;
@@ -107,6 +111,7 @@ export function MatrixEditor({ q, onChange }: Props) {
               const selected = key === selectedKey;
               const middleTop = row === size / 2;
               const middleLeft = column === size / 2;
+              const referenceText = matrixReferenceText(cellReferences);
               return (
                 <button
                   type="button"
@@ -114,8 +119,11 @@ export function MatrixEditor({ q, onChange }: Props) {
                   onClick={() => setSelectedKey(key)}
                   aria-label={`Edit references in column ${column + 1}, row ${
                     row + 1
-                  } from top`}
-                  className={`relative min-w-0 border-gray-200 p-1 text-left text-[10px] leading-tight ${
+                  } from top${
+                    referenceText ? `. Reference items: ${referenceText}` : ""
+                  }`}
+                  title={referenceText || undefined}
+                  className={`relative min-w-0 overflow-hidden border-gray-200 p-1 text-left text-[10px] leading-tight ${
                     selected
                       ? "z-10 bg-indigo-100 ring-2 ring-inset ring-indigo-600"
                       : "hover:bg-indigo-50"
@@ -130,9 +138,11 @@ export function MatrixEditor({ q, onChange }: Props) {
                       <span className="absolute right-1 top-1 rounded-full bg-indigo-600 px-1 text-[9px] text-white">
                         {cellReferences.length}
                       </span>
-                      <span className="block truncate pr-4">
-                        {cellReferences[0].label}
-                      </span>
+                      <MatrixCellReferences
+                        references={cellReferences}
+                        size={size}
+                        className="pr-5"
+                      />
                     </>
                   )}
                 </button>
