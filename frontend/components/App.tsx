@@ -38,7 +38,9 @@ export function App() {
       <div className="flex-1">{page}</div>
       <footer className="text-center text-xs text-gray-400 py-4">
         <a href="/" className="hover:text-gray-600">Audience Survey</a> ·{" "}
-        <a href="/source" className="underline hover:text-gray-600">view source</a>
+        <a href="/source" className="underline hover:text-gray-600">
+          view source
+        </a>
       </footer>
     </div>
   );

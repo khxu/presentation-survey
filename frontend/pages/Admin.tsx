@@ -2,8 +2,15 @@
 import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
 import type { Question, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
-import { mergePublishedQuestion, mergePublishedQuestionStates, questionsEqual } from "../lib/questionDraft.ts";
-import { newQuestion, QuestionEditor } from "../components/builder/QuestionEditor.tsx";
+import {
+  mergePublishedQuestion,
+  mergePublishedQuestionStates,
+  questionsEqual,
+} from "../lib/questionDraft.ts";
+import {
+  newQuestion,
+  QuestionEditor,
+} from "../components/builder/QuestionEditor.tsx";
 import { ResultsView } from "../components/charts/ResultsView.tsx";
 import { ProposalReview } from "../components/proposals/ProposalReview.tsx";
 
@@ -13,15 +20,21 @@ export function Admin({ adminKey }: { adminKey: string }) {
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>(location.search.includes("new=1") ? "share" : "build");
+  const [tab, setTab] = useState<Tab>(
+    location.search.includes("new=1") ? "share" : "build",
+  );
   const [saving, setSaving] = useState<"idle" | "saving" | "saved">("idle");
   const [savedQuestions, setSavedQuestions] = useState<Question[]>([]);
   const [draftQuestions, setDraftQuestions] = useState<Question[]>([]);
-  const [questionSaveStatus, setQuestionSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [questionSaveStatus, setQuestionSaveStatus] = useState<
+    "idle" | "saving" | "saved"
+  >("idle");
   const [questionError, setQuestionError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [releasingQuestionId, setReleasingQuestionId] = useState<string | null>(null);
+  const [releasingQuestionId, setReleasingQuestionId] = useState<string | null>(
+    null,
+  );
   const saveTimer = useRef<number | null>(null);
   const pendingPatch = useRef<Partial<Survey>>({});
   const inFlight = useRef<Promise<void> | null>(null);
@@ -33,9 +46,7 @@ export function Admin({ adminKey }: { adminKey: string }) {
       setDraftQuestions(d.survey.questions);
       setSurvey(d.survey);
       setTotal(d.totalResponses);
-    }).catch((e) =>
-      setError(e.message)
-    );
+    }).catch((e) => setError(e.message));
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
@@ -80,7 +91,9 @@ export function Admin({ adminKey }: { adminKey: string }) {
 
   function saveError(error: unknown) {
     setSaving("idle");
-    setError(error instanceof Error ? error.message : "Could not save changes.");
+    setError(
+      error instanceof Error ? error.message : "Could not save changes.",
+    );
   }
 
   function edit(patch: Partial<Survey>) {
@@ -126,7 +139,9 @@ export function Admin({ adminKey }: { adminKey: string }) {
       setQuestionSaveStatus("saved");
     } catch (error) {
       setQuestionSaveStatus("idle");
-      setQuestionError(error instanceof Error ? error.message : "Could not save questions.");
+      setQuestionError(
+        error instanceof Error ? error.message : "Could not save questions.",
+      );
     }
   }
 
@@ -139,9 +154,18 @@ export function Admin({ adminKey }: { adminKey: string }) {
         saveError(error);
         throw error;
       }
-      const { survey: fresh, approvedQuestion } = await api.admin.approveProposal(adminKey, proposalId, question);
-      setSavedQuestions(questionsDirty ? mergePublishedQuestion(savedQuestions, approvedQuestion) : fresh.questions);
-      setDraftQuestions(questionsDirty ? mergePublishedQuestion(draftQuestions, approvedQuestion) : fresh.questions);
+      const { survey: fresh, approvedQuestion } = await api.admin
+        .approveProposal(adminKey, proposalId, question);
+      setSavedQuestions(
+        questionsDirty
+          ? mergePublishedQuestion(savedQuestions, approvedQuestion)
+          : fresh.questions,
+      );
+      setDraftQuestions(
+        questionsDirty
+          ? mergePublishedQuestion(draftQuestions, approvedQuestion)
+          : fresh.questions,
+      );
       setQuestionSaveStatus(questionsDirty ? "idle" : "saved");
       setQuestionError(null);
       setSurvey(fresh);
@@ -156,12 +180,22 @@ export function Admin({ adminKey }: { adminKey: string }) {
     try {
       await flush();
       const previousPublished = savedQuestions;
-      const { survey: fresh } = await api.admin.setQuestionReleased(adminKey, questionId, released);
+      const { survey: fresh } = await api.admin.setQuestionReleased(
+        adminKey,
+        questionId,
+        released,
+      );
       setSavedQuestions(fresh.questions);
-      setDraftQuestions((draft) => mergePublishedQuestionStates(draft, previousPublished, fresh.questions));
+      setDraftQuestions((draft) =>
+        mergePublishedQuestionStates(draft, previousPublished, fresh.questions)
+      );
       setSurvey(fresh);
     } catch (error) {
-      setQuestionError(error instanceof Error ? error.message : "Could not update question release.");
+      setQuestionError(
+        error instanceof Error
+          ? error.message
+          : "Could not update question release.",
+      );
     } finally {
       setReleasingQuestionId(null);
     }
@@ -173,11 +207,15 @@ export function Admin({ adminKey }: { adminKey: string }) {
         <div className="text-4xl mb-2">🔒</div>
         <h1 className="text-xl font-bold mb-2">Invalid admin link</h1>
         <p className="text-gray-600 text-sm">{error}</p>
-        <a href="/" className="inline-block mt-4 text-indigo-600 underline">Create a new survey</a>
+        <a href="/" className="inline-block mt-4 text-indigo-600 underline">
+          Create a new survey
+        </a>
       </div>
     );
   }
-  if (!survey) return <div className="text-center mt-24 text-gray-500">Loading…</div>;
+  if (!survey) {
+    return <div className="text-center mt-24 text-gray-500">Loading…</div>;
+  }
 
   const adminUrl = `${location.origin}/admin/${adminKey}`;
   const joinUrl = `${location.origin}/s/${survey.slug}`;
@@ -199,11 +237,21 @@ export function Admin({ adminKey }: { adminKey: string }) {
       className="min-w-0 max-w-4xl mx-auto px-4 py-8"
     >
       {error && (
-        <div role="alert" className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+        <div
+          role="alert"
+          className="mb-4 rounded-xl bg-red-50 p-4 text-sm text-red-700"
+        >
           <p>{error} Your unsaved edits are still shown.</p>
           <div className="flex flex-wrap gap-4 mt-2">
-            <button onClick={() => void flush().catch(saveError)} className="underline">Retry save</button>
-            <button onClick={() => location.reload()} className="underline">Reload saved version (discard local edits)</button>
+            <button
+              onClick={() => void flush().catch(saveError)}
+              className="underline"
+            >
+              Retry save
+            </button>
+            <button onClick={() => location.reload()} className="underline">
+              Reload saved version (discard local edits)
+            </button>
           </div>
         </div>
       )}
@@ -215,16 +263,26 @@ export function Admin({ adminKey }: { adminKey: string }) {
           className="flex-1 text-3xl font-extrabold bg-transparent border-b-2 border-transparent focus:border-indigo-400 focus:outline-none"
         />
         <span className="text-xs text-gray-400 w-14 text-right">
-          {saving === "saving" ? "saving…" : saving === "saved" ? "saved ✓" : ""}
+          {saving === "saving"
+            ? "saving…"
+            : saving === "saved"
+            ? "saved ✓"
+            : ""}
         </span>
       </div>
 
       {location.search.includes("new=1") && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 mb-6 text-sm">
-          <strong>🔑 Bookmark this page!</strong> This secret admin link is the only way back to your survey:
+          <strong>🔑 Bookmark this page!</strong>{" "}
+          This secret admin link is the only way back to your survey:
           <div className="flex gap-2 mt-2">
-            <code className="flex-1 bg-white border rounded px-2 py-1 text-xs break-all">{adminUrl}</code>
-            <button onClick={() => copy(adminUrl)} className="bg-amber-500 text-white px-3 rounded text-xs">
+            <code className="flex-1 bg-white border rounded px-2 py-1 text-xs break-all">
+              {adminUrl}
+            </code>
+            <button
+              onClick={() => copy(adminUrl)}
+              className="bg-amber-500 text-white px-3 rounded text-xs"
+            >
               {copied ? "Copied!" : "Copy"}
             </button>
           </div>
@@ -238,14 +296,20 @@ export function Admin({ adminKey }: { adminKey: string }) {
           onChange={(v) => toggle({ acceptingResponses: v })}
           label="Accepting responses"
         />
-        <Switch on={survey.resultsVisible} onChange={(v) => toggle({ resultsVisible: v })} label="Show results to audience" />
+        <Switch
+          on={survey.resultsVisible}
+          onChange={(v) => toggle({ resultsVisible: v })}
+          label="Show results to audience"
+        />
         <Switch
           on={survey.audienceFacets}
           onChange={(v) => toggle({ audienceFacets: v })}
           label="Audience can group results"
         />
         <div className="ml-auto text-sm text-gray-600">
-          <span className="text-2xl font-bold text-indigo-600">{total}</span> responses
+          <span className="text-2xl font-bold text-indigo-600">{total}</span>
+          {" "}
+          responses
         </div>
       </div>
 
@@ -256,10 +320,18 @@ export function Admin({ adminKey }: { adminKey: string }) {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 font-medium capitalize -mb-px border-b-2 ${
-              tab === t ? "border-indigo-600 text-indigo-700" : "border-transparent text-gray-500 hover:text-gray-800"
+              tab === t
+                ? "border-indigo-600 text-indigo-700"
+                : "border-transparent text-gray-500 hover:text-gray-800"
             }`}
           >
-            {t === "build" ? "✏️ Build" : t === "share" ? "📱 Share" : t === "proposals" ? "Proposals" : "📊 Results"}
+            {t === "build"
+              ? "✏️ Build"
+              : t === "share"
+              ? "📱 Share"
+              : t === "proposals"
+              ? "Proposals"
+              : "📊 Results"}
           </button>
         ))}
       </div>
@@ -274,16 +346,25 @@ export function Admin({ adminKey }: { adminKey: string }) {
             rows={2}
           />
           <p className="text-xs text-gray-500">
-            💡 Mark questions like “What's your profession?” as <span className="text-amber-600 font-semibold">Demographic</span> to
-            group every other answer by them on the results screen.
+            💡 Mark questions like “What's your profession?” as{" "}
+            <span className="text-amber-600 font-semibold">Demographic</span>
+            {" "}
+            to group every other answer by them on the results screen.
           </p>
           <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex flex-wrap items-center gap-3">
             <div className="flex-1 min-w-52">
-              <p className={`text-sm font-semibold ${questionsDirty ? "text-amber-700" : "text-emerald-700"}`}>
-                {questionsDirty ? "Unsaved question changes" : "Questions are saved"}
+              <p
+                className={`text-sm font-semibold ${
+                  questionsDirty ? "text-amber-700" : "text-emerald-700"
+                }`}
+              >
+                {questionsDirty
+                  ? "Unsaved question changes"
+                  : "Questions are saved"}
               </p>
               <p className="text-xs text-gray-600 mt-0.5">
-                Saving puts new questions on deck. Release each saved question when the audience should receive it.
+                Saving puts new questions on deck. Release each saved question
+                when the audience should receive it.
               </p>
             </div>
             <button
@@ -302,11 +383,26 @@ export function Admin({ adminKey }: { adminKey: string }) {
             </button>
           </div>
           {questionError && (
-            <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm text-red-700">
-              <p>{questionError} Your unsaved question changes are still shown.</p>
+            <div
+              role="alert"
+              className="rounded-xl bg-red-50 p-4 text-sm text-red-700"
+            >
+              <p>
+                {questionError} Your unsaved question changes are still shown.
+              </p>
               <div className="flex flex-wrap gap-4 mt-2">
-                <button type="button" onClick={() => void saveQuestions()} className="underline">Retry save</button>
-                <button type="button" onClick={() => location.reload()} className="underline">
+                <button
+                  type="button"
+                  onClick={() => void saveQuestions()}
+                  className="underline"
+                >
+                  Retry save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => location.reload()}
+                  className="underline"
+                >
                   Reload saved version (discard local edits)
                 </button>
               </div>
@@ -318,11 +414,16 @@ export function Admin({ adminKey }: { adminKey: string }) {
               q={q}
               index={i}
               total={questions.length}
-              published={savedQuestions.some((question) => question.id === q.id)}
+              published={savedQuestions.some((question) =>
+                question.id === q.id
+              )}
               releasing={releasingQuestionId === q.id}
-              onReleaseChange={(released) => void setQuestionReleased(q.id, released)}
-              onChange={(nq) => setQuestions(questions.map((x) => x.id === q.id ? nq : x))}
-              onDelete={() => setQuestions(questions.filter((x) => x.id !== q.id))}
+              onReleaseChange={(released) =>
+                void setQuestionReleased(q.id, released)}
+              onChange={(nq) =>
+                setQuestions(questions.map((x) => x.id === q.id ? nq : x))}
+              onDelete={() =>
+                setQuestions(questions.filter((x) => x.id !== q.id))}
               onMove={(dir) => {
                 const j = i + dir;
                 if (j < 0 || j >= questions.length) return;
@@ -333,22 +434,65 @@ export function Admin({ adminKey }: { adminKey: string }) {
             />
           ))}
           <div className="flex gap-2 flex-wrap">
-            <button onClick={() => setQuestions([...questions, newQuestion("single_choice")])} className="btn-add">+ Multiple choice</button>
-            <button onClick={() => setQuestions([...questions, newQuestion("scale")])} className="btn-add">+ Scale</button>
-            <button onClick={() => setQuestions([...questions, newQuestion("ranked_choice")])} className="btn-add">+ Ranked choice</button>
-            <button onClick={() => setQuestions([...questions, newQuestion("word_cloud")])} className="btn-add">+ Word cloud</button>
-            <button onClick={() => setQuestions([...questions, newQuestion("free_text")])} className="btn-add">+ Free text</button>
-            <button onClick={() => setQuestions([...questions, newQuestion("emoji_reaction")])} className="btn-add">+ Emoji</button>
+            <button
+              onClick={() =>
+                setQuestions([...questions, newQuestion("single_choice")])}
+              className="btn-add"
+            >
+              + Multiple choice
+            </button>
+            <button
+              onClick={() => setQuestions([...questions, newQuestion("scale")])}
+              className="btn-add"
+            >
+              + Scale
+            </button>
+            <button
+              onClick={() =>
+                setQuestions([...questions, newQuestion("ranked_choice")])}
+              className="btn-add"
+            >
+              + Ranked choice
+            </button>
+            <button
+              onClick={() =>
+                setQuestions([...questions, newQuestion("word_cloud")])}
+              className="btn-add"
+            >
+              + Word cloud
+            </button>
+            <button
+              onClick={() =>
+                setQuestions([...questions, newQuestion("free_text")])}
+              className="btn-add"
+            >
+              + Free text
+            </button>
+            <button
+              onClick={() =>
+                setQuestions([...questions, newQuestion("emoji_reaction")])}
+              className="btn-add"
+            >
+              + Emoji
+            </button>
           </div>
-          <style>{`.btn-add{background:#fff;border:1px dashed #a5b4fc;color:#4338ca;border-radius:.75rem;padding:.5rem .9rem;font-size:.875rem} .btn-add:hover{background:#eef2ff}`}</style>
+          <style>
+            {`.btn-add{background:#fff;border:1px dashed #a5b4fc;color:#4338ca;border-radius:.75rem;padding:.5rem .9rem;font-size:.875rem} .btn-add:hover{background:#eef2ff}`}
+          </style>
         </div>
       )}
 
       {tab === "share" && (
         <div className="grid md:grid-cols-2 gap-6">
           <div className="bg-white rounded-2xl shadow p-6 text-center">
-            <img src={`/api/s/${survey.slug}/qr.svg`} alt="QR" className="w-64 h-64 mx-auto" />
-            <p className="mt-3 font-mono text-indigo-700 break-all">{joinUrl.replace(/^https?:\/\//, "")}</p>
+            <img
+              src={`/api/s/${survey.slug}/qr.svg`}
+              alt="QR"
+              className="w-64 h-64 mx-auto"
+            />
+            <p className="mt-3 font-mono text-indigo-700 break-all">
+              {joinUrl.replace(/^https?:\/\//, "")}
+            </p>
             <a
               href={presentUrl}
               target="_blank"
@@ -359,10 +503,24 @@ export function Admin({ adminKey }: { adminKey: string }) {
           </div>
           <div className="space-y-3 text-sm">
             <LinkRow label="Respondent link" url={joinUrl} onCopy={copy} />
-            <LinkRow label="Public results (needs toggle on)" url={resultsUrl} onCopy={copy} />
-            <LinkRow label="Admin link (secret!)" url={adminUrl} onCopy={copy} danger />
+            <LinkRow
+              label="Public results (needs toggle on)"
+              url={resultsUrl}
+              onCopy={copy}
+            />
+            <LinkRow
+              label="Admin link (secret!)"
+              url={adminUrl}
+              onCopy={copy}
+              danger
+            />
             <div className="bg-white rounded-xl shadow p-4 space-y-2">
-              <a href={`/api/admin/${adminKey}/export.csv`} className="block text-indigo-600 hover:underline">⬇ Export responses as CSV</a>
+              <a
+                href={`/api/admin/${adminKey}/export.csv`}
+                className="block text-indigo-600 hover:underline"
+              >
+                ⬇ Export responses as CSV
+              </a>
               <button
                 onClick={async () => {
                   if (confirm("Delete ALL responses? This cannot be undone.")) {
@@ -398,29 +556,64 @@ export function Admin({ adminKey }: { adminKey: string }) {
           projectorUrl={resultsUrl}
         />
       )}
-      {tab === "proposals" && <ProposalReview adminKey={adminKey} onApprove={approve} />}
+      {tab === "proposals" && (
+        <ProposalReview adminKey={adminKey} onApprove={approve} />
+      )}
     </fieldset>
   );
 }
 
-function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label: string }) {
+function Switch(
+  { on, onChange, label }: {
+    on: boolean;
+    onChange: (v: boolean) => void;
+    label: string;
+  },
+) {
   return (
-    <button onClick={() => onChange(!on)} className="flex items-center gap-2 text-sm">
-      <span className={`w-10 h-6 rounded-full relative transition ${on ? "bg-green-500" : "bg-gray-300"}`}>
-        <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+    <button
+      onClick={() => onChange(!on)}
+      className="flex items-center gap-2 text-sm"
+    >
+      <span
+        className={`w-10 h-6 rounded-full relative transition ${
+          on ? "bg-green-500" : "bg-gray-300"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${
+            on ? "left-[18px]" : "left-0.5"
+          }`}
+        />
       </span>
       <span className={on ? "font-semibold" : "text-gray-500"}>{label}</span>
     </button>
   );
 }
 
-function LinkRow({ label, url, onCopy, danger }: { label: string; url: string; onCopy: (s: string) => void; danger?: boolean }) {
+function LinkRow(
+  { label, url, onCopy, danger }: {
+    label: string;
+    url: string;
+    onCopy: (s: string) => void;
+    danger?: boolean;
+  },
+) {
   return (
-    <div className={`bg-white rounded-xl shadow p-3 ${danger ? "border border-amber-300" : ""}`}>
+    <div
+      className={`bg-white rounded-xl shadow p-3 ${
+        danger ? "border border-amber-300" : ""
+      }`}
+    >
       <div className="text-xs text-gray-500 mb-1">{label}</div>
       <div className="flex gap-2">
         <code className="flex-1 text-xs break-all">{url}</code>
-        <button onClick={() => onCopy(url)} className="text-indigo-600 text-xs hover:underline shrink-0">copy</button>
+        <button
+          onClick={() => onCopy(url)}
+          className="text-indigo-600 text-xs hover:underline shrink-0"
+        >
+          copy
+        </button>
       </div>
     </div>
   );

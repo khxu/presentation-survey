@@ -1,50 +1,89 @@
 # 📊 Audience Survey
 
-Live polling for talks. Show a QR code, let the room answer on their phones with **no login**, then reveal results on the projector — with ranked-choice runoffs, word clouds, and breakdowns by who's in the audience.
+Live polling for talks. Show a QR code, let the room answer on their phones with
+**no login**, then reveal results on the projector — with ranked-choice runoffs,
+word clouds, and breakdowns by who's in the audience.
 
 **[Create a survey](url:index.ts)** · no account needed
 
 ## How a talk goes
 
-1. **Create** — hit the homepage, name your survey. You get a **secret admin link** (bookmark it — it's the only way back).
-2. **Build** — add and edit questions as a private draft, then click **Save questions** to put new questions **on deck**. Mark ones like *"What's your profession?"* as **Demographic** so you can group everything else by them later.
-3. **Share** — put the fullscreen **join slide** (`/s/<slug>/present`) on the projector. It shows a big QR code + short URL.
-4. **Release and collect** — click **Release to audience** on each saved question when you reach it in the talk. Audience pages poll for newly released questions and present them one per screen. Each phone gets a cookie so answers are one-per-device and editable; no accounts.
-5. **Reveal** — flip **Show results to audience**. Open `/s/<slug>/results` on the projector; it live-updates every 3s. Use **Group by** to split every chart by a demographic question, or click a group chip to isolate it.
-6. **Co-create** — participants suggest complete questions and upvote others from the intro or thank-you screen. In the admin **Proposals** tab, review a draft, edit it, then approve it to append a live question. Finished participants see an invitation to answer newly added questions rather than being moved away from the community queue.
+1. **Create** — hit the homepage, name your survey. You get a **secret admin
+   link** (bookmark it — it's the only way back).
+2. **Build** — add and edit questions as a private draft, then click **Save
+   questions** to put new questions **on deck**. Mark ones like _"What's your
+   profession?"_ as **Demographic** so you can group everything else by them
+   later.
+3. **Share** — put the fullscreen **join slide** (`/s/<slug>/present`) on the
+   projector. It shows a big QR code + short URL.
+4. **Release and collect** — click **Release to audience** on each saved
+   question when you reach it in the talk. Audience pages poll for newly
+   released questions and present them one per screen. Each phone gets a cookie
+   so answers are one-per-device and editable; no accounts.
+5. **Reveal** — flip **Show results to audience**. Open `/s/<slug>/results` on
+   the projector; it live-updates every 3s. Use **Group by** to split every
+   chart by a demographic question, or click a group chip to isolate it.
+6. **Co-create** — participants suggest complete questions and upvote others
+   from the intro or thank-you screen. In the admin **Proposals** tab, review a
+   draft, edit it, then approve it to append a live question. Finished
+   participants see an invitation to answer newly added questions rather than
+   being moved away from the community queue.
 
 ## Community questions
 
-Participants can propose any supported question type, including options or scale bounds. Pending proposals are public, sorted by upvotes (oldest first on ties), and refresh every 5 seconds while the page is visible. Each device can toggle one upvote per proposal; submitting a proposal does not automatically vote for it. Proposals do not require answering the survey first, and participants may upvote their own ideas.
+Participants can propose any supported question type, including options or scale
+bounds. Pending proposals are public, sorted by upvotes (oldest first on ties),
+and refresh every 5 seconds while the page is visible. Each device can toggle
+one upvote per proposal; submitting a proposal does not automatically vote for
+it. Proposals do not require answering the survey first, and participants may
+upvote their own ideas.
 
-The presenter sets required, demographic, and result-visibility flags during review. Approval is manual regardless of vote count, appends the edited question **on deck**, and removes its proposal from the pending queue. The presenter releases it separately when ready. Votes are not survey answers. There are no comments, participant edits, rejection actions, or automatic approvals.
+The presenter sets required, demographic, and result-visibility flags during
+review. Approval is manual regardless of vote count, appends the edited question
+**on deck**, and removes its proposal from the pending queue. The presenter
+releases it separately when ready. Votes are not survey answers. There are no
+comments, participant edits, rejection actions, or automatic approvals.
 
-Closing **Accepting responses** also closes proposals and voting, but leaves pending ideas readable. Admins may still approve while closed; participants can answer those questions when the survey reopens. Clearing responses keeps proposals and votes; deleting the survey removes them.
+Closing **Accepting responses** also closes proposals and voting, but leaves
+pending ideas readable. Admins may still approve while closed; participants can
+answer those questions when the survey reopens. Clearing responses keeps
+proposals and votes; deleting the survey removes them.
 
-Proposal prompts are limited to 500 characters. Choice questions require 2–20 distinct nonempty options of up to 120 characters each. Scales use integer bounds between -100 and 100 and contain 2–21 steps. Submission and approval requests are limited to 16 KB.
+Proposal prompts are limited to 500 characters. Choice questions require 2–20
+distinct nonempty options of up to 120 characters each. Scales use integer
+bounds between -100 and 100 and contain 2–21 steps. Submission and approval
+requests are limited to 16 KB.
 
 ## Question types
 
-| Type | Respondent sees | Results visualization |
-| --- | --- | --- |
-| Multiple choice (one) | Tappable cards | Colored bar chart; grouped bars when faceted |
-| Multiple choice (many) | Tappable cards | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted |
-| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid | Heat-colored histogram + animated mean |
-| **Ranked choice** | Tap-to-rank list with reorder | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
-| Word cloud | Single word/phrase | Sized, tilted word cloud |
-| Free text | Textarea | Sticky-note wall |
-| Emoji reaction | Emoji grid | Floating emoji bubbles scaled by count |
+| Type                                | Respondent sees               | Results visualization                                                                                                                     |
+| ----------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple choice (one)               | Tappable cards                | Colored bar chart; grouped bars when faceted                                                                                              |
+| Multiple choice (many)              | Tappable cards                | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
+| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                   | Heat-colored histogram + animated mean                                                                                                    |
+| **Ranked choice**                   | Tap-to-rank list with reorder | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
+| Word cloud                          | Single word/phrase            | Sized, tilted word cloud                                                                                                                  |
+| Free text                           | Textarea                      | Sticky-note wall                                                                                                                          |
+| Emoji reaction                      | Emoji grid                    | Floating emoji bubbles scaled by count                                                                                                    |
 
 ## Admin controls
 
-- **Save questions** — persist question additions, edits, deletions, and reordering after reviewing the draft; newly saved questions remain on deck
-- **Release to audience / Move on deck** (per question) — immediately control whether a saved question can be seen and answered without publishing other unsaved edits; moving a question back on deck preserves answers already collected
+- **Save questions** — persist question additions, edits, deletions, and
+  reordering after reviewing the draft; newly saved questions remain on deck
+- **Release to audience / Move on deck** (per question) — immediately control
+  whether a saved question can be seen and answered without publishing other
+  unsaved edits; moving a question back on deck preserves answers already
+  collected
 - **Accepting responses** — close the survey when you move on
 - **Show results to audience** — survey-wide reveal toggle
-- **Hide results** (per question) — keeps a question out of the audience view even when results are on
-- **Audience can group results** — let respondents use the facet controls too (off by default, keeps the projector clean)
-- **Focus one question** — projector-sized single-question view for pacing a talk
-- **Proposals** — review the audience's most-upvoted question drafts, edit, and approve
+- **Hide results** (per question) — keeps a question out of the audience view
+  even when results are on
+- **Audience can group results** — let respondents use the facet controls too
+  (off by default, keeps the projector clean)
+- **Focus one question** — projector-sized single-question view for pacing a
+  talk
+- **Proposals** — review the audience's most-upvoted question drafts, edit, and
+  approve
 - CSV export, clear responses, delete survey
 
 ## Architecture
@@ -67,11 +106,27 @@ graph LR
   AdminAPI --> Agg
 ```
 
-**Security model:** the admin key is a 28-char random token stored only as a SHA-256 hash. Respondents are identified by an `HttpOnly` cookie; clearing it or switching devices allows a second response or another proposal vote (acceptable trade-off for a login-free live poll — a "welcome back" banner nudges returning devices to edit instead). Public proposal payloads never expose device identifiers. Votes are unique per device and proposal, not per verified person; this is not strong abuse prevention.
+**Security model:** the admin key is a 28-char random token stored only as a
+SHA-256 hash. Respondents are identified by an `HttpOnly` cookie; clearing it or
+switching devices allows a second response or another proposal vote (acceptable
+trade-off for a login-free live poll — a "welcome back" banner nudges returning
+devices to edit instead). Public proposal payloads never expose device
+identifiers. Votes are unique per device and proposal, not per verified person;
+this is not strong abuse prevention.
 
-Approval claims the pending proposal and appends its question on deck in a single SQLite write transaction. Regular builder edits stay local until **Save questions** is clicked. Release actions update only the persisted release flag, so they never publish unrelated draft edits. Saves compare their last persisted question snapshot to prevent stale tabs from overwriting an approval or release; conflicts retain local edits and offer a reload rather than silently losing questions.
+Approval claims the pending proposal and appends its question on deck in a
+single SQLite write transaction. Regular builder edits stay local until **Save
+questions** is clicked. Release actions update only the persisted release flag,
+so they never publish unrelated draft edits. Saves compare their last persisted
+question snapshot to prevent stale tabs from overwriting an approval or release;
+conflicts retain local edits and offer a reload rather than silently losing
+questions.
 
-Questions saved before progressive release was introduced are treated as released, preserving existing survey behavior. Public survey and results APIs omit on-deck questions, and crafted response requests cannot answer them. Admin results and CSV exports retain the full question set. If a released question is moved back on deck, its stored answers remain available if it is released again.
+Questions saved before progressive release was introduced are treated as
+released, preserving existing survey behavior. Public survey and results APIs
+omit on-deck questions, and crafted response requests cannot answer them. Admin
+results and CSV exports retain the full question set. If a released question is
+moved back on deck, its stored answers remain available if it is released again.
 
 ## Files
 
@@ -105,7 +160,10 @@ frontend/
 
 ## Proposal regression tests
 
-The tests use Deno's built-in runner and real in-memory SQLite through `node:sqlite`; the test configuration redirects only the Val Town SQLite import. No live survey data is used. The placeholder environment value lets the existing Val Town asset utility initialize without real credentials.
+The tests use Deno's built-in runner and real in-memory SQLite through
+`node:sqlite`; the test configuration redirects only the Val Town SQLite import.
+No live survey data is used. The placeholder environment value lets the existing
+Val Town asset utility initialize without real credentials.
 
 ```sh
 VAL_TOWN_API_KEY=local-test-placeholder deno test --allow-import --allow-env=VAL_TOWN_API_KEY \

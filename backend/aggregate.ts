@@ -1,8 +1,18 @@
-import type { Answers, FacetGroup, IRVRound, Question, QuestionAggregate, Survey } from "../shared/types.ts";
+import type {
+  Answers,
+  FacetGroup,
+  IRVRound,
+  Question,
+  QuestionAggregate,
+  Survey,
+} from "../shared/types.ts";
 import { canonicalizeChoiceSelection } from "../shared/questions.ts";
 
 /** Instant-runoff voting: returns each round's tallies until a majority winner emerges. */
-export function instantRunoff(ballots: string[][], optionIds: string[]): IRVRound[] {
+export function instantRunoff(
+  ballots: string[][],
+  optionIds: string[],
+): IRVRound[] {
   const rounds: IRVRound[] = [];
   let remaining = new Set(optionIds);
   const valid = ballots.filter((b) => b.length > 0);
@@ -31,33 +41,53 @@ export function instantRunoff(ballots: string[][], optionIds: string[]): IRVRoun
     const losers = [...remaining].filter((id) => tallies[id] === minVal);
     const eliminated = losers[losers.length - 1];
     remaining.delete(eliminated);
-    rounds.push({ round, tallies, eliminated, winner: remaining.size === 1 ? [...remaining][0] : null });
+    rounds.push({
+      round,
+      tallies,
+      eliminated,
+      winner: remaining.size === 1 ? [...remaining][0] : null,
+    });
     if (remaining.size === 1) break;
   }
   return rounds;
 }
 
 const STOP = new Set(
-  "the a an and or but of to in on for with is are was were be it this that i you we they my our your".split(" "),
+  "the a an and or but of to in on for with is are was were be it this that i you we they my our your"
+    .split(" "),
 );
 
-export function aggregateQuestion(q: Question, responses: Answers[]): QuestionAggregate {
-  const vals = responses.map((r) => r[q.id]).filter((v) => v !== undefined && v !== null && v !== "");
-  const agg: QuestionAggregate = { questionId: q.id, type: q.type, responseCount: vals.length };
+export function aggregateQuestion(
+  q: Question,
+  responses: Answers[],
+): QuestionAggregate {
+  const vals = responses.map((r) => r[q.id]).filter((v) =>
+    v !== undefined && v !== null && v !== ""
+  );
+  const agg: QuestionAggregate = {
+    questionId: q.id,
+    type: q.type,
+    responseCount: vals.length,
+  };
 
   switch (q.type) {
     case "single_choice":
     case "emoji_reaction": {
       const counts: Record<string, number> = {};
       for (const o of q.options) counts[o.id] = 0;
-      for (const v of vals) if (typeof v === "string" && v in counts) counts[v]++;
+      for (const v of vals) {
+        if (typeof v === "string" && v in counts) counts[v]++;
+      }
       agg.counts = counts;
       break;
     }
     case "multi_choice": {
       const counts: Record<string, number> = {};
       for (const o of q.options) counts[o.id] = 0;
-      const combinations = new Map<string, { optionIds: string[]; count: number }>();
+      const combinations = new Map<
+        string,
+        { optionIds: string[]; count: number }
+      >();
       let responseCount = 0;
       for (const v of vals) {
         const optionIds = canonicalizeChoiceSelection(q.options, v);
@@ -69,9 +99,13 @@ export function aggregateQuestion(q: Question, responses: Answers[]): QuestionAg
         if (combination) combination.count++;
         else combinations.set(key, { optionIds, count: 1 });
       }
-      const optionIndex = new Map(q.options.map((option, index) => [option.id, index]));
+      const optionIndex = new Map(
+        q.options.map((option, index) => [option.id, index]),
+      );
       const compareOptionIds = (a: string[], b: string[]) => {
-        if (a.length === 0 || b.length === 0) return a.length === b.length ? 0 : a.length === 0 ? 1 : -1;
+        if (a.length === 0 || b.length === 0) {
+          return a.length === b.length ? 0 : a.length === 0 ? 1 : -1;
+        }
         for (let i = 0; i < Math.min(a.length, b.length); i++) {
           const difference = optionIndex.get(a[i])! - optionIndex.get(b[i])!;
           if (difference) return difference;
@@ -103,7 +137,9 @@ export function aggregateQuestion(q: Question, responses: Answers[]): QuestionAg
       break;
     }
     case "free_text": {
-      agg.texts = vals.filter((v): v is string => typeof v === "string").slice(-200).reverse();
+      agg.texts = vals.filter((v): v is string => typeof v === "string").slice(
+        -200,
+      ).reverse();
       break;
     }
     case "word_cloud": {
@@ -151,7 +187,9 @@ export function buildResults(
   groupBy: string | null,
   visibleQuestions: Question[],
 ): FacetGroup[] {
-  const facetQ = groupBy ? survey.questions.find((q) => q.id === groupBy && q.isDemographic) : undefined;
+  const facetQ = groupBy
+    ? survey.questions.find((q) => q.id === groupBy && q.isDemographic)
+    : undefined;
   if (!facetQ) {
     return [{
       key: "__all__",
@@ -166,9 +204,13 @@ export function buildResults(
   const labels = new Map<string, string>();
   if (facetQ.type === "scale") {
     const min = facetQ.scaleMin ?? 1, max = facetQ.scaleMax ?? 5;
-    for (let i = min; i <= max; i++) buckets.set(String(i), []), labels.set(String(i), String(i));
+    for (let i = min; i <= max; i++) {
+      buckets.set(String(i), []), labels.set(String(i), String(i));
+    }
   } else {
-    for (const o of facetQ.options) buckets.set(o.id, []), labels.set(o.id, o.label);
+    for (const o of facetQ.options) {
+      buckets.set(o.id, []), labels.set(o.id, o.label);
+    }
   }
   buckets.set("__none__", []);
   labels.set("__none__", "No answer");
@@ -179,7 +221,9 @@ export function buildResults(
       buckets.get("__none__")!.push(r);
     } else if (Array.isArray(v)) {
       let placed = false;
-      for (const x of v) if (buckets.has(x)) buckets.get(x)!.push(r), placed = true;
+      for (const x of v) {
+        if (buckets.has(x)) buckets.get(x)!.push(r), placed = true;
+      }
       if (!placed) buckets.get("__none__")!.push(r);
     } else {
       const k = String(v);
@@ -194,7 +238,9 @@ export function buildResults(
       key,
       label: labels.get(key) ?? key,
       responseCount: rs.length,
-      aggregates: visibleQuestions.filter((q) => q.id !== facetQ.id).map((q) => aggregateQuestion(q, rs)),
+      aggregates: visibleQuestions.filter((q) => q.id !== facetQ.id).map((q) =>
+        aggregateQuestion(q, rs)
+      ),
     });
   }
   return groups;

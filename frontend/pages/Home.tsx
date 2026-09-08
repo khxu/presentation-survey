@@ -13,7 +13,9 @@ export function Home() {
     setBusy(true);
     setError(null);
     try {
-      const { adminKey } = await api.createSurvey(title.trim() || "Untitled survey");
+      const { adminKey } = await api.createSurvey(
+        title.trim() || "Untitled survey",
+      );
       navigate(`/admin/${adminKey}?new=1`);
     } catch (err: any) {
       setError(err.message);
@@ -25,14 +27,22 @@ export function Home() {
   return (
     <div className="max-w-xl mx-auto px-6 pt-20 text-center">
       <div className="text-6xl mb-4">📊</div>
-      <h1 className="text-4xl font-extrabold tracking-tight mb-3">Audience Survey</h1>
+      <h1 className="text-4xl font-extrabold tracking-tight mb-3">
+        Audience Survey
+      </h1>
       <p className="text-gray-600 mb-10">
-        Poll the room during your talk. Show a QR code, collect answers with no login, and reveal live results —
-        including ranked-choice runoffs and breakdowns by who's in the audience.
+        Poll the room during your talk. Show a QR code, collect answers with no
+        login, and reveal live results — including ranked-choice runoffs and
+        breakdowns by who's in the audience.
       </p>
 
-      <form onSubmit={create} className="bg-white rounded-2xl shadow-lg p-6 text-left">
-        <label className="block text-sm font-semibold text-gray-700 mb-2">Survey title</label>
+      <form
+        onSubmit={create}
+        className="bg-white rounded-2xl shadow-lg p-6 text-left"
+      >
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Survey title
+        </label>
         <input
           value={title}
           onChange={(e: any) => setTitle(e.target.value)}
@@ -48,7 +58,8 @@ export function Home() {
         </button>
         {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
         <p className="text-xs text-gray-500 mt-4">
-          You'll get a secret admin link. Keep it — it's the only way to edit your survey and see results.
+          You'll get a secret admin link. Keep it — it's the only way to edit
+          your survey and see results.
         </p>
       </form>
 

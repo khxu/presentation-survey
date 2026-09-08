@@ -38,7 +38,10 @@ export interface Survey {
   questions: Question[];
 }
 
-export type QuestionDraft = Pick<Question, "type" | "prompt" | "options" | "scaleMin" | "scaleMax">;
+export type QuestionDraft = Pick<
+  Question,
+  "type" | "prompt" | "options" | "scaleMin" | "scaleMax"
+>;
 
 export interface QuestionProposal {
   id: string;
@@ -119,5 +122,6 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
 export const DEFAULT_EMOJIS = ["🔥", "😍", "🤔", "😴", "😂", "🤯"];
 
 export function hasOptions(t: QuestionType) {
-  return t === "single_choice" || t === "multi_choice" || t === "ranked_choice" || t === "emoji_reaction";
+  return t === "single_choice" || t === "multi_choice" ||
+    t === "ranked_choice" || t === "emoji_reaction";
 }

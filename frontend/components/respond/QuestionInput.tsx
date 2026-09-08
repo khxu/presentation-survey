@@ -10,7 +10,9 @@ interface Props {
 
 const choiceCls = (on: boolean) =>
   `w-full text-left px-5 py-4 rounded-xl border-2 text-lg transition active:scale-[0.98] ${
-    on ? "border-indigo-600 bg-indigo-50 font-semibold" : "border-gray-200 bg-white hover:border-indigo-300"
+    on
+      ? "border-indigo-600 bg-indigo-50 font-semibold"
+      : "border-gray-200 bg-white hover:border-indigo-300"
   }`;
 
 export function QuestionInput({ q, value, onChange }: Props) {
@@ -19,7 +21,11 @@ export function QuestionInput({ q, value, onChange }: Props) {
       return (
         <div className="space-y-3">
           {q.options.map((o) => (
-            <button key={o.id} onClick={() => onChange(o.id)} className={choiceCls(value === o.id)}>
+            <button
+              key={o.id}
+              onClick={() => onChange(o.id)}
+              className={choiceCls(value === o.id)}
+            >
               {o.label}
             </button>
           ))}
@@ -35,7 +41,8 @@ export function QuestionInput({ q, value, onChange }: Props) {
             return (
               <button
                 key={o.id}
-                onClick={() => onChange(on ? sel.filter((x) => x !== o.id) : [...sel, o.id])}
+                onClick={() =>
+                  onChange(on ? sel.filter((x) => x !== o.id) : [...sel, o.id])}
                 className={choiceCls(on)}
               >
                 <span className="mr-2">{on ? "☑" : "☐"}</span>
@@ -58,7 +65,9 @@ export function QuestionInput({ q, value, onChange }: Props) {
               key={n}
               onClick={() => onChange(n)}
               className={`aspect-square rounded-xl border-2 text-xl font-bold transition ${
-                value === n ? "border-indigo-600 bg-indigo-600 text-white scale-105" : "border-gray-200 bg-white hover:border-indigo-300"
+                value === n
+                  ? "border-indigo-600 bg-indigo-600 text-white scale-105"
+                  : "border-gray-200 bg-white hover:border-indigo-300"
               }`}
             >
               {n}
@@ -98,7 +107,9 @@ export function QuestionInput({ q, value, onChange }: Props) {
               key={o.id}
               onClick={() => onChange(o.id)}
               className={`aspect-square rounded-2xl border-2 text-5xl transition ${
-                value === o.id ? "border-indigo-600 bg-indigo-50 scale-110" : "border-gray-200 bg-white hover:scale-105"
+                value === o.id
+                  ? "border-indigo-600 bg-indigo-50 scale-110"
+                  : "border-gray-200 bg-white hover:scale-105"
               }`}
             >
               {o.label}
@@ -108,12 +119,24 @@ export function QuestionInput({ q, value, onChange }: Props) {
       );
 
     case "ranked_choice":
-      return <RankedInput q={q} value={Array.isArray(value) ? value : []} onChange={onChange} />;
+      return (
+        <RankedInput
+          q={q}
+          value={Array.isArray(value) ? value : []}
+          onChange={onChange}
+        />
+      );
   }
 }
 
 /** Tap-to-rank + arrows (works well on phones; HTML5 drag is flaky on touch). */
-function RankedInput({ q, value, onChange }: { q: Question; value: string[]; onChange: (v: string[]) => void }) {
+function RankedInput(
+  { q, value, onChange }: {
+    q: Question;
+    value: string[];
+    onChange: (v: string[]) => void;
+  },
+) {
   const ranked = value.filter((id) => q.options.some((o) => o.id === id));
   const unranked = q.options.filter((o) => !ranked.includes(o.id));
   const label = (id: string) => q.options.find((o) => o.id === id)?.label ?? id;
@@ -129,7 +152,9 @@ function RankedInput({ q, value, onChange }: { q: Question; value: string[]; onC
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Your ranking (1 = favorite)</div>
+        <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+          Your ranking (1 = favorite)
+        </div>
         {ranked.length === 0 && (
           <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center text-gray-400 text-sm">
             Tap options below to rank them
@@ -157,16 +182,35 @@ function RankedInput({ q, value, onChange }: { q: Question; value: string[]; onC
                 {i + 1}
               </span>
               <span className="flex-1 font-medium">{label(id)}</span>
-              <button onClick={() => move(i, i - 1)} className="text-gray-500 px-1 disabled:opacity-20" disabled={i === 0}>▲</button>
-              <button onClick={() => move(i, i + 1)} className="text-gray-500 px-1 disabled:opacity-20" disabled={i === ranked.length - 1}>▼</button>
-              <button onClick={() => onChange(ranked.filter((x) => x !== id))} className="text-gray-400 hover:text-red-500 px-1">×</button>
+              <button
+                onClick={() => move(i, i - 1)}
+                className="text-gray-500 px-1 disabled:opacity-20"
+                disabled={i === 0}
+              >
+                ▲
+              </button>
+              <button
+                onClick={() => move(i, i + 1)}
+                className="text-gray-500 px-1 disabled:opacity-20"
+                disabled={i === ranked.length - 1}
+              >
+                ▼
+              </button>
+              <button
+                onClick={() => onChange(ranked.filter((x) => x !== id))}
+                className="text-gray-400 hover:text-red-500 px-1"
+              >
+                ×
+              </button>
             </div>
           ))}
         </div>
       </div>
       {unranked.length > 0 && (
         <div>
-          <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">Not yet ranked</div>
+          <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+            Not yet ranked
+          </div>
           <div className="space-y-2">
             {unranked.map((o) => (
               <button
