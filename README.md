@@ -51,23 +51,23 @@ proposals and votes; deleting the survey removes them.
 
 Proposal prompts are limited to 500 characters. Choice questions require 2–20
 distinct nonempty options of up to 120 characters each. Scales use integer
-bounds between -100 and 100 and contain 2–21 steps. Matrix questions use a 2×2,
-4×4, or 6×6 grid, four nonempty endpoint labels of up to 60 characters, and up
-to 100 reference labels of 120 characters each. Submission and approval requests
-are limited to 16 KB.
+bounds between -100 and 100 and contain 2–21 steps. Matrix questions use a 2×2
+grid, four nonempty endpoint labels of up to 60 characters, and up to 100
+reference labels of 120 characters each. Submission and approval requests are
+limited to 16 KB.
 
 ## Question types
 
-| Type                                | Respondent sees                                                                                          | Results visualization                                                                                                                     |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Multiple choice (one)               | Tappable cards                                                                                           | Colored bar chart; grouped bars when faceted                                                                                              |
-| Multiple choice (many)              | Tappable cards                                                                                           | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
-| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                                              | Heat-colored histogram + animated mean                                                                                                    |
-| **Ranked choice**                   | Tap-to-rank list with reorder                                                                            | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
-| Word cloud                          | Single word/phrase                                                                                       | Sized, tilted word cloud                                                                                                                  |
-| Free text                           | Textarea                                                                                                 | Sticky-note wall                                                                                                                          |
-| Emoji reaction                      | Emoji grid                                                                                               | Floating emoji bubbles scaled by count                                                                                                    |
-| **2×2 matrix**                      | Tappable 2×2, 4×4, or 6×6 grid with axis endpoints, positioned symbol-and-label references, and a legend | Cell heatmap with counts, percentages, the same positioned labels, and a legend; one heatmap per facet group                              |
+| Type                                | Respondent sees                                                                                            | Results visualization                                                                                                                     |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple choice (one)               | Tappable cards                                                                                             | Colored bar chart; grouped bars when faceted                                                                                              |
+| Multiple choice (many)              | Tappable cards                                                                                             | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
+| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                                                | Heat-colored histogram + animated mean                                                                                                    |
+| **Ranked choice**                   | Tap-to-rank list with reorder                                                                              | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
+| Word cloud                          | Single word/phrase                                                                                         | Sized, tilted word cloud                                                                                                                  |
+| Free text                           | Textarea                                                                                                   | Sticky-note wall                                                                                                                          |
+| Emoji reaction                      | Emoji grid                                                                                                 | Floating emoji bubbles scaled by count                                                                                                    |
+| **2×2 matrix**                      | Tappable 2×2 grid with axis endpoints, independently positioned reference symbols and labels, and a legend | Cell heatmap with counts, percentages, the same positioned references, and a legend; one heatmap per facet group                          |
 
 ## Admin controls
 
@@ -89,16 +89,15 @@ are limited to 16 KB.
   approve
 - CSV export, clear responses, delete survey
 
-Matrix answers select one cell for the item named in the question prompt. A 6×6
-matrix represents four 3×3 quadrants and has 36 selectable cells. Reference
-items are read-only context, not additional answers. Each reference appears in
-its cell as a labeled symbol, and question creators can drag that
-symbol-and-label annotation to avoid visual overlap. The relative placement is
-reused in the builder, respondent grid, and results heatmap at every grid size.
-Each reference uses the same shape and color in the grid and retained legend;
-its legend entry includes a small highlighted grid showing its cell. CSV exports
-describe a placement with one-based coordinates such as
-`column 5, row 2 from
+Matrix answers select one of four cells for the item named in the question
+prompt. Reference items are read-only context, not additional answers. Each
+reference appears in its cell as a symbol connected to a label, and question
+creators can drag the symbol and label independently to avoid visual overlap
+while keeping the full label inside its cell. The relative placement is reused
+in the builder, respondent grid, and results heatmap. Each reference uses the
+same shape and color in the grid and retained legend; its legend entry includes
+a small highlighted grid showing its cell. CSV exports describe a placement with
+one-based coordinates such as `column 2, row 1 from
 top`.
 
 ## Architecture

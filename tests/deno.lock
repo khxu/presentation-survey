@@ -436,11 +436,13 @@
     }
   },
   "redirects": {
+    "https://esm.sh/@types/react@~18.2.79/index.d.ts": "https://esm.sh/@types/react@18.2.79/index.d.ts",
     "https://esm.sh/@types/react@~18.2.79/jsx-runtime.d.ts": "https://esm.sh/@types/react@18.2.79/jsx-runtime.d.ts",
     "https://esm.town/v/std/API_URL": "https://esm.town/v/std/API_URL?v=5",
     "https://esm.town/v/std/utils/index.ts": "https://esm.town/v/std/utils@285-main/index.ts"
   },
   "remote": {
+    "https://esm.sh/react@18.2.0": "fed8aeb7d240bb42a2167c9c7c6e842e128c7630cbcb08c4d61c9c1926f89c75",
     "https://esm.sh/react@18.2.0/denonext/jsx-runtime.mjs": "29e0c0cc8b75e3f6e2c23a8f2cfe61a07924b99025b34ea6c9dd59cb1621d59c",
     "https://esm.sh/react@18.2.0/denonext/react.mjs": "a986c2876dc2f73879f395e677dc34cb751f260e69db16364810655f884df173",
     "https://esm.sh/react@18.2.0/jsx-runtime": "0bb3cca902d25a6827ac8153c8038b637e21bd20180bd58e827515d67de80582",

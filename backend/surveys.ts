@@ -132,6 +132,16 @@ export async function updateSurvey(
         409,
       );
     }
+    if (
+      patch.questions.some((question) =>
+        question.type === "matrix_2x2" && question.matrixSize !== 2
+      )
+    ) {
+      throw new RequestError(
+        "Only 2x2 matrix questions are supported.",
+        400,
+      );
+    }
     const currentResult = await sqlite.execute({
       sql: `SELECT questions_json FROM surveys WHERE id = ?`,
       args: [id],

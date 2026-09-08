@@ -1,8 +1,16 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
+import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
+import type {
+  KeyboardEvent,
+  MouseEvent,
+  PointerEvent,
+} from "https://esm.sh/react@18.2.0";
 import type { MatrixReference, MatrixSize } from "../../shared/types.ts";
 import {
   clampMatrixReferencePosition,
-  matrixReferenceDefaultPosition,
+  MATRIX_REFERENCE_POSITION_MAX,
+  MATRIX_REFERENCE_POSITION_MIN,
+  matrixReferenceDefaultPositions,
 } from "../../shared/questions.ts";
 
 const MARKER_COLORS = [
@@ -142,11 +150,7 @@ export function MatrixCellMarkers(
   const hiddenCount = Math.max(0, visibleReferences.length - limit);
   if (visibleReferences.length === 0) return null;
 
-  const markerSize = size === 2
-    ? "h-5 w-5 sm:h-6 sm:w-6"
-    : size === 4
-    ? "h-3.5 w-3.5 sm:h-4 sm:w-4"
-    : "h-2.5 w-2.5 sm:h-3 sm:w-3";
+  const markerSize = "h-5 w-5 sm:h-6 sm:w-6";
 
   return (
     <span
@@ -173,7 +177,7 @@ export function MatrixCellAnnotations(
   {
     references,
     cellReferences,
-    size,
+    size: _size,
     editable = false,
     onPositionChange,
     className = "",
@@ -182,7 +186,12 @@ export function MatrixCellAnnotations(
     cellReferences: MatrixReference[];
     size: MatrixSize;
     editable?: boolean;
-    onPositionChange?: (id: string, x: number, y: number) => void;
+    onPositionChange?: (
+      id: string,
+      target: MatrixReferencePositionTarget,
+      x: number,
+      y: number,
+    ) => void;
     className?: string;
   },
 ) {
@@ -199,100 +208,322 @@ export function MatrixCellAnnotations(
       className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
       aria-hidden={editable ? undefined : "true"}
     >
-      {visibleReferences.map((reference, indexInCell) => {
-        const fallback = matrixReferenceDefaultPosition(indexInCell);
-        const x = reference.x ?? fallback.x;
-        const y = reference.y ?? fallback.y;
-        const index = referenceIndexes.get(reference.id) ?? 0;
-        const sizeClasses = matrixAnnotationSizeClasses(size);
-        return editable
-          ? (
-            <button
-              type="button"
-              key={reference.id}
-              title={`${reference.label} — drag or use arrow keys to reposition`}
-              aria-label={`Position ${reference.label}`}
-              className={`pointer-events-auto absolute flex touch-none select-none items-center border border-gray-300 bg-white/95 font-semibold text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-move ${sizeClasses.annotation}`}
-              style={matrixReferencePositionStyle(x, y)}
-              onClick={(event: any) => event.stopPropagation()}
-              onPointerDown={(event: any) => {
-                event.stopPropagation();
-                event.currentTarget.setPointerCapture(event.pointerId);
-              }}
-              onPointerMove={(event: any) => {
-                if (
-                  !onPositionChange ||
-                  !event.currentTarget.hasPointerCapture(event.pointerId)
-                ) {
-                  return;
-                }
-                const cell = event.currentTarget.parentElement;
-                if (!cell) return;
-                const bounds = cell.getBoundingClientRect();
-                if (!bounds.width || !bounds.height) return;
-                onPositionChange(
-                  reference.id,
-                  clampMatrixReferencePosition(
-                    (event.clientX - bounds.left) / bounds.width,
-                  ),
-                  clampMatrixReferencePosition(
-                    (event.clientY - bounds.top) / bounds.height,
-                  ),
-                );
-              }}
-              onPointerUp={(event: any) => {
-                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                  event.currentTarget.releasePointerCapture(event.pointerId);
-                }
-              }}
-              onKeyDown={(event: any) => {
-                if (!onPositionChange) return;
-                const step = event.shiftKey ? 0.1 : 0.025;
-                const offsets: Record<string, [number, number]> = {
-                  ArrowLeft: [-step, 0],
-                  ArrowRight: [step, 0],
-                  ArrowUp: [0, -step],
-                  ArrowDown: [0, step],
-                };
-                const offset = offsets[event.key];
-                if (!offset) return;
-                event.preventDefault();
-                event.stopPropagation();
-                onPositionChange(
-                  reference.id,
-                  clampMatrixReferencePosition(x + offset[0]),
-                  clampMatrixReferencePosition(y + offset[1]),
-                );
-              }}
-            >
-              <MatrixReferenceMarker
-                index={index}
-                className={sizeClasses.marker}
-              />
-              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                {reference.label}
-              </span>
-            </button>
-          )
-          : (
-            <span
-              key={reference.id}
-              title={reference.label}
-              className={`absolute flex items-center border border-gray-300 bg-white/95 font-semibold text-gray-900 shadow-sm ${sizeClasses.annotation}`}
-              style={matrixReferencePositionStyle(x, y)}
-            >
-              <MatrixReferenceMarker
-                index={index}
-                className={sizeClasses.marker}
-              />
-              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                {reference.label}
-              </span>
-            </span>
-          );
-      })}
+      {visibleReferences.map((reference, indexInCell) => (
+        <MatrixReferenceAnnotation
+          key={reference.id}
+          reference={reference}
+          index={referenceIndexes.get(reference.id) ?? 0}
+          indexInCell={indexInCell}
+          editable={editable}
+          onPositionChange={onPositionChange}
+        />
+      ))}
     </span>
   );
+}
+
+export type MatrixReferencePositionTarget = "symbol" | "label";
+
+function MatrixReferenceAnnotation(
+  {
+    reference,
+    index,
+    indexInCell,
+    editable,
+    onPositionChange,
+  }: {
+    reference: MatrixReference;
+    index: number;
+    indexInCell: number;
+    editable: boolean;
+    onPositionChange?: (
+      id: string,
+      target: MatrixReferencePositionTarget,
+      x: number,
+      y: number,
+    ) => void;
+  },
+) {
+  const fallback = matrixReferenceDefaultPositions(indexInCell);
+  const symbolX = reference.symbolX ?? fallback.symbolX;
+  const symbolY = reference.symbolY ?? fallback.symbolY;
+  const labelX = reference.labelX ?? fallback.labelX;
+  const labelY = reference.labelY ?? fallback.labelY;
+  const labelRef = useRef<HTMLElement | null>(null);
+  const [labelBounds, setLabelBounds] = useState({
+    cellWidth: 0,
+    cellHeight: 0,
+    labelWidth: 0,
+    labelHeight: 0,
+  });
+
+  useEffect(() => {
+    const label = labelRef.current;
+    const cell = label?.parentElement;
+    if (!label || !cell) return;
+    const measure = () => {
+      const cellRect = cell.getBoundingClientRect();
+      const labelRect = label.getBoundingClientRect();
+      setLabelBounds({
+        cellWidth: cellRect.width,
+        cellHeight: cellRect.height,
+        labelWidth: labelRect.width,
+        labelHeight: labelRect.height,
+      });
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(measure);
+    observer?.observe(cell);
+    observer?.observe(label);
+    return () => observer?.disconnect();
+  }, [reference.label]);
+
+  const visibleLabelPosition = clampMatrixLabelPosition(
+    labelX,
+    labelY,
+    labelBounds,
+  );
+  const connector = matrixReferenceConnectorPoints(
+    symbolX,
+    symbolY,
+    visibleLabelPosition.x,
+    visibleLabelPosition.y,
+  );
+  const commonTitle = "drag or use arrow keys to reposition";
+
+  return (
+    <>
+      <svg
+        className="pointer-events-none absolute inset-0 h-full w-full"
+        aria-hidden="true"
+      >
+        <line
+          {...connector}
+          stroke={matrixReferenceMarkerStyle(index).color}
+          strokeWidth="1.5"
+          strokeOpacity="0.65"
+          strokeDasharray="3 2"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+      {editable
+        ? (
+          <>
+            <button
+              type="button"
+              title={`Symbol for ${reference.label} — ${commonTitle}`}
+              aria-label={`Position symbol for ${reference.label}`}
+              className="pointer-events-auto absolute flex h-7 w-7 touch-none select-none items-center justify-center rounded-full border border-gray-300 bg-white/95 shadow-sm cursor-move focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              style={matrixReferencePositionStyle(symbolX, symbolY)}
+              {...positionControlProps(
+                reference.id,
+                "symbol",
+                symbolX,
+                symbolY,
+                onPositionChange,
+              )}
+            >
+              <MatrixReferenceMarker index={index} className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              ref={(element: HTMLElement | null) => {
+                labelRef.current = element;
+              }}
+              title={`Label for ${reference.label} — ${commonTitle}`}
+              aria-label={`Position label for ${reference.label}`}
+              className="pointer-events-auto absolute max-w-[88%] touch-none select-none rounded-md border border-gray-300 bg-white/95 px-1.5 py-1 text-center text-[10px] font-semibold leading-tight text-gray-900 shadow-sm cursor-move break-words sm:text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
+              style={matrixReferencePositionStyle(
+                visibleLabelPosition.x,
+                visibleLabelPosition.y,
+              )}
+              {...positionControlProps(
+                reference.id,
+                "label",
+                visibleLabelPosition.x,
+                visibleLabelPosition.y,
+                onPositionChange,
+              )}
+            >
+              {reference.label}
+            </button>
+          </>
+        )
+        : (
+          <>
+            <span
+              className="absolute flex h-7 w-7 items-center justify-center rounded-full border border-gray-300 bg-white/95 shadow-sm"
+              style={matrixReferencePositionStyle(symbolX, symbolY)}
+            >
+              <MatrixReferenceMarker index={index} className="h-5 w-5" />
+            </span>
+            <span
+              ref={(element: HTMLElement | null) => {
+                labelRef.current = element;
+              }}
+              title={reference.label}
+              className="absolute max-w-[88%] rounded-md border border-gray-300 bg-white/95 px-1.5 py-1 text-center text-[10px] font-semibold leading-tight text-gray-900 shadow-sm break-words sm:text-xs"
+              style={matrixReferencePositionStyle(
+                visibleLabelPosition.x,
+                visibleLabelPosition.y,
+              )}
+            >
+              {reference.label}
+            </span>
+          </>
+        )}
+    </>
+  );
+}
+
+function positionControlProps(
+  id: string,
+  target: MatrixReferencePositionTarget,
+  x: number,
+  y: number,
+  onPositionChange?: (
+    id: string,
+    target: MatrixReferencePositionTarget,
+    x: number,
+    y: number,
+  ) => void,
+) {
+  return {
+    onClick: (event: MouseEvent<HTMLButtonElement>) => event.stopPropagation(),
+    onPointerDown: (event: PointerEvent<HTMLButtonElement>) => {
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    onPointerMove: (event: PointerEvent<HTMLButtonElement>) => {
+      if (
+        !onPositionChange ||
+        !event.currentTarget.hasPointerCapture(event.pointerId)
+      ) {
+        return;
+      }
+      const cell = event.currentTarget.parentElement;
+      if (!cell) return;
+      const cellBounds = cell.getBoundingClientRect();
+      if (!cellBounds.width || !cellBounds.height) return;
+      const nextX = (event.clientX - cellBounds.left) / cellBounds.width;
+      const nextY = (event.clientY - cellBounds.top) / cellBounds.height;
+      const next = target === "label"
+        ? clampMatrixLabelPosition(nextX, nextY, {
+          cellWidth: cellBounds.width,
+          cellHeight: cellBounds.height,
+          labelWidth: event.currentTarget.offsetWidth,
+          labelHeight: event.currentTarget.offsetHeight,
+        })
+        : {
+          x: clampMatrixReferencePosition(nextX),
+          y: clampMatrixReferencePosition(nextY),
+        };
+      onPositionChange(id, target, next.x, next.y);
+    },
+    onPointerUp: releasePointer,
+    onPointerCancel: releasePointer,
+    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
+      if (!onPositionChange) return;
+      const step = event.shiftKey ? 0.1 : 0.025;
+      const offsets: Record<string, [number, number]> = {
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+      };
+      const offset = offsets[event.key];
+      if (!offset) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const cell = event.currentTarget.parentElement;
+      const cellBounds = cell?.getBoundingClientRect();
+      const next = target === "label" && cellBounds
+        ? clampMatrixLabelPosition(x + offset[0], y + offset[1], {
+          cellWidth: cellBounds.width,
+          cellHeight: cellBounds.height,
+          labelWidth: event.currentTarget.offsetWidth,
+          labelHeight: event.currentTarget.offsetHeight,
+        })
+        : {
+          x: clampMatrixReferencePosition(x + offset[0]),
+          y: clampMatrixReferencePosition(y + offset[1]),
+        };
+      onPositionChange(id, target, next.x, next.y);
+    },
+  };
+}
+
+function releasePointer(event: PointerEvent<HTMLButtonElement>) {
+  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+}
+
+interface MatrixElementBounds {
+  cellWidth: number;
+  cellHeight: number;
+  labelWidth: number;
+  labelHeight: number;
+}
+
+export function clampMatrixLabelPosition(
+  x: number,
+  y: number,
+  bounds: MatrixElementBounds,
+): { x: number; y: number } {
+  return {
+    x: clampPositionForExtent(
+      x,
+      bounds.labelWidth,
+      bounds.cellWidth,
+    ),
+    y: clampPositionForExtent(
+      y,
+      bounds.labelHeight,
+      bounds.cellHeight,
+    ),
+  };
+}
+
+function clampPositionForExtent(
+  value: number,
+  elementSize: number,
+  containerSize: number,
+): number {
+  if (elementSize <= 0 || containerSize <= 0) {
+    return clampMatrixReferencePosition(value);
+  }
+  const padding = 4 / containerSize;
+  const extent = elementSize / containerSize / 2 + padding;
+  const min = Math.max(
+    MATRIX_REFERENCE_POSITION_MIN,
+    Math.min(0.5, extent),
+  );
+  const max = Math.min(
+    MATRIX_REFERENCE_POSITION_MAX,
+    Math.max(0.5, 1 - extent),
+  );
+  return roundPosition(Math.min(max, Math.max(min, value)));
+}
+
+function roundPosition(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+export function matrixReferenceConnectorPoints(
+  symbolX: number,
+  symbolY: number,
+  labelX: number,
+  labelY: number,
+): { x1: string; y1: string; x2: string; y2: string } {
+  return {
+    x1: `${clampMatrixReferencePosition(symbolX) * 100}%`,
+    y1: `${clampMatrixReferencePosition(symbolY) * 100}%`,
+    x2: `${clampMatrixReferencePosition(labelX) * 100}%`,
+    y2: `${clampMatrixReferencePosition(labelY) * 100}%`,
+  };
 }
 
 export function matrixReferencePositionStyle(
@@ -307,26 +538,12 @@ export function matrixReferencePositionStyle(
 }
 
 export function matrixAnnotationSizeClasses(
-  size: MatrixSize,
+  _size: MatrixSize,
 ): { annotation: string; marker: string } {
-  if (size === 2) {
-    return {
-      annotation:
-        "max-w-[88%] gap-1 rounded-md px-1 py-0.5 text-[10px] leading-tight sm:text-xs",
-      marker: "h-4 w-4 sm:h-5 sm:w-5",
-    };
-  }
-  if (size === 4) {
-    return {
-      annotation:
-        "max-w-[94%] gap-0.5 rounded px-0.5 py-px text-[7px] leading-tight sm:text-[9px]",
-      marker: "h-2.5 w-2.5 sm:h-3 sm:w-3",
-    };
-  }
   return {
     annotation:
-      "max-w-[96%] gap-px rounded-sm px-px py-px text-[5px] leading-none sm:text-[7px]",
-    marker: "h-2 w-2 sm:h-2.5 sm:w-2.5",
+      "max-w-[88%] rounded-md px-1.5 py-1 text-[10px] leading-tight sm:text-xs",
+    marker: "h-5 w-5",
   };
 }
 
@@ -434,8 +651,6 @@ export function matrixReferenceText(
     .join(" · ");
 }
 
-export function matrixCellMarkerLimit(size: MatrixSize): number {
-  if (size === 2) return 8;
-  if (size === 4) return 4;
-  return 3;
+export function matrixCellMarkerLimit(_size: MatrixSize): number {
+  return 8;
 }
