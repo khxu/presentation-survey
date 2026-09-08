@@ -27,8 +27,21 @@ export function newQuestion(type: QuestionType = "single_choice"): Question {
     ...(type === "scale" ? { scaleMin: 1, scaleMax: 5 } : {}),
     isDemographic: false,
     required: false,
+    released: false,
     hidden: false,
   };
+}
+
+/** Questions saved before progressive release existed remain audience-visible. */
+export function normalizeStoredQuestions(raw: unknown): Question[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((question, position) => ({
+    ...(question as Question),
+    position,
+    released: typeof (question as Partial<Question>)?.released === "boolean"
+      ? (question as Question).released
+      : true,
+  }));
 }
 
 function record(raw: unknown): Record<string, unknown> {
@@ -117,5 +130,6 @@ export function normalizeApprovedQuestion(raw: unknown): Question {
   const canFacet = ["single_choice", "multi_choice", "scale", "emoji_reaction"]
     .includes(question.type);
   question.isDemographic = canFacet && question.isDemographic;
+  question.released = false;
   return question;
 }

@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
 import type { Answers, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
+import { reconcileQuestionStep } from "../lib/respondFlow.ts";
 import { QuestionInput } from "../components/respond/QuestionInput.tsx";
 import { CommunityQuestions } from "../components/proposals/CommunityQuestions.tsx";
 
@@ -14,9 +15,13 @@ export function Respond({ slug }: { slug: string }) {
   const [saving, setSaving] = useState(false);
   const [completedQuestions, setCompletedQuestions] = useState<string[] | null>(null);
   const pollRef = useRef<number | null>(null);
+  const surveyRef = useRef<Survey | null>(null);
+  const releasedQuestionIds = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     api.getSurvey(slug).then((d) => {
+      surveyRef.current = d.survey;
+      releasedQuestionIds.current = new Set(d.survey.questions.map((question) => question.id));
       setSurvey(d.survey);
       if (d.existing && Object.keys(d.existing).length) {
         setAnswers(d.existing);
@@ -25,7 +30,28 @@ export function Respond({ slug }: { slug: string }) {
     }).catch((e) => setError(e.message));
     // Poll for survey changes (admin may add questions or toggle results mid-talk)
     pollRef.current = setInterval(() => {
-      api.getSurvey(slug).then((d) => setSurvey(d.survey)).catch(() => {});
+      api.getSurvey(slug).then((d) => {
+        const previous = surveyRef.current;
+        if (previous) {
+          setStep((currentStep) => reconcileQuestionStep(previous.questions, d.survey.questions, currentStep));
+        }
+        const nextIds = new Set(d.survey.questions.map((question) => question.id));
+        const newlyReleased = d.survey.questions.filter((question) => !releasedQuestionIds.current.has(question.id));
+        if (d.existing && newlyReleased.length) {
+          setAnswers((current) => {
+            const next = { ...current };
+            for (const question of newlyReleased) {
+              if (next[question.id] === undefined && d.existing?.[question.id] !== undefined) {
+                next[question.id] = d.existing[question.id];
+              }
+            }
+            return next;
+          });
+        }
+        releasedQuestionIds.current = nextIds;
+        surveyRef.current = d.survey;
+        setSurvey(d.survey);
+      }).catch(() => {});
     }, 8000) as unknown as number;
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);

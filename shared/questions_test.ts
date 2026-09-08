@@ -3,6 +3,7 @@ import {
   newQuestion,
   normalizeApprovedQuestion,
   normalizeDraft,
+  normalizeStoredQuestions,
   QuestionValidationError,
 } from "./questions.ts";
 import { hasOptions, QUESTION_TYPE_LABELS } from "./types.ts";
@@ -122,9 +123,10 @@ Deno.test("approval uses fresh IDs, allows admin flags, and stays compatible wit
   const q = normalizeApprovedQuestion(raw);
   notEqual(q.id, raw.id);
   notEqual(q.options[0].id, raw.options[0].id);
-  deepStrictEqual([q.position, q.required, q.hidden, q.isDemographic], [
+  deepStrictEqual([q.position, q.required, q.released, q.hidden, q.isDemographic], [
     0,
     true,
+    false,
     true,
     true,
   ]);
@@ -139,4 +141,14 @@ Deno.test("approval uses fresh IDs, allows admin flags, and stays compatible wit
     normalizeApprovedQuestion({ ...raw, type: "free_text" }).isDemographic,
     false,
   );
+});
+
+Deno.test("stored questions preserve release state and default legacy questions to released", () => {
+  const legacy = { ...newQuestion("free_text"), released: undefined, position: 20 };
+  const onDeck = { ...newQuestion("free_text"), released: false, position: 30 };
+  const normalized = normalizeStoredQuestions([legacy, onDeck]);
+  deepStrictEqual(normalized.map((question) => [question.position, question.released]), [
+    [0, true],
+    [1, false],
+  ]);
 });

@@ -1,4 +1,5 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
+import { normalizeStoredQuestions } from "../shared/questions.ts";
 import { ensureSchema, randomId, sha256, sqlite } from "./db.ts";
 import { RequestError } from "./errors.ts";
 
@@ -12,8 +13,29 @@ function rowToSurvey(r: Record<string, unknown>): Survey {
     acceptingResponses: Number(r.accepting_responses) === 1,
     audienceFacets: Number(r.audience_facets) === 1,
     createdAt: String(r.created_at),
-    questions: JSON.parse(String(r.questions_json ?? "[]")),
+    questions: normalizeStoredQuestions(JSON.parse(String(r.questions_json ?? "[]"))),
   };
+}
+
+export function publicSurvey(survey: Survey): Survey {
+  return {
+    ...survey,
+    questions: survey.questions
+      .filter((question) => question.released)
+      .map((question, position) => ({ ...question, position })),
+  };
+}
+
+export function filterAnswers(answers: Answers | null, questions: Question[]): Answers | null {
+  if (!answers) return null;
+  const visible = new Set(questions.map((question) => question.id));
+  return Object.fromEntries(Object.entries(answers).filter(([questionId]) => visible.has(questionId)));
+}
+
+export function mergeReleasedAnswers(existing: Answers | null, releasedQuestions: Question[], incoming: Answers): Answers {
+  const merged = { ...(existing ?? {}) };
+  for (const question of releasedQuestions) delete merged[question.id];
+  return { ...merged, ...incoming };
 }
 
 export async function createSurvey(title: string): Promise<{ survey: Survey; adminKey: string }> {
@@ -57,6 +79,7 @@ export async function updateSurvey(id: string, patch: SurveyPatch): Promise<Surv
   await ensureSchema();
   const sets: string[] = [];
   const args: (string | number)[] = [];
+  let expectedPersistedQuestions: string | undefined;
   if (patch.title !== undefined) sets.push("title = ?"), args.push(patch.title);
   if (patch.description !== undefined) sets.push("description = ?"), args.push(patch.description);
   if (patch.resultsVisible !== undefined) sets.push("results_visible = ?"), args.push(patch.resultsVisible ? 1 : 0);
@@ -68,16 +91,53 @@ export async function updateSurvey(id: string, patch: SurveyPatch): Promise<Surv
     if (!Array.isArray(patch.questions) || !Array.isArray(patch.expectedQuestions)) {
       throw new RequestError("Reload the builder before saving questions.", 409);
     }
-    const qs = patch.questions.map((q, i) => ({ ...q, position: i }));
+    const currentResult = await sqlite.execute({
+      sql: `SELECT questions_json FROM surveys WHERE id = ?`,
+      args: [id],
+    });
+    const currentJson = currentResult.rows[0]?.questions_json;
+    if (currentJson === undefined) throw new RequestError("Survey not found.", 404);
+    const currentQuestions = normalizeStoredQuestions(JSON.parse(String(currentJson)));
+    if (JSON.stringify(currentQuestions) !== JSON.stringify(patch.expectedQuestions)) {
+      throw new RequestError("Questions changed in another tab. Reload before saving.", 409);
+    }
+    expectedPersistedQuestions = String(currentJson);
+    const qs = patch.questions.map((q, i) => ({ ...q, position: i, released: q.released === true }));
     sets.push("questions_json = ?"), args.push(JSON.stringify(qs));
   }
   if (!sets.length) return;
   args.push(id);
   // Compare the last saved snapshot so an older builder cannot erase an approval.
   const condition = patch.questions !== undefined ? " AND json(questions_json) = json(?)" : "";
-  if (patch.questions !== undefined) args.push(JSON.stringify(patch.expectedQuestions));
+  if (expectedPersistedQuestions !== undefined) args.push(expectedPersistedQuestions);
   const result = await sqlite.execute({ sql: `UPDATE surveys SET ${sets.join(", ")} WHERE id = ?${condition} RETURNING *`, args });
   if (!result.rowsAffected) throw new RequestError("Questions changed in another tab. Reload before saving.", 409);
+  return rowToSurvey(result.rows[0] as Record<string, unknown>);
+}
+
+export async function setQuestionReleased(
+  surveyId: string,
+  questionId: string,
+  released: boolean,
+): Promise<Survey> {
+  await ensureSchema();
+  const currentResult = await sqlite.execute({ sql: `SELECT * FROM surveys WHERE id = ?`, args: [surveyId] });
+  if (!currentResult.rows[0]) throw new RequestError("Survey not found.", 404);
+  const currentRow = currentResult.rows[0] as Record<string, unknown>;
+  const current = rowToSurvey(currentRow);
+  if (!current.questions.some((question) => question.id === questionId)) {
+    throw new RequestError("Question not found.", 404);
+  }
+  const questions = current.questions.map((question) =>
+    question.id === questionId ? { ...question, released } : question
+  );
+  const result = await sqlite.execute({
+    sql: `UPDATE surveys SET questions_json = ? WHERE id = ? AND json(questions_json) = json(?) RETURNING *`,
+    args: [JSON.stringify(questions), surveyId, String(currentRow.questions_json)],
+  });
+  if (!result.rowsAffected) {
+    throw new RequestError("Questions changed in another tab. Retry the release action.", 409);
+  }
   return rowToSurvey(result.rows[0] as Record<string, unknown>);
 }
 
