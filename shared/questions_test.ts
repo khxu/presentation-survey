@@ -1,7 +1,9 @@
 import { deepStrictEqual, notEqual, ok, throws } from "node:assert/strict";
 import {
+  clampMatrixReferencePosition,
   isMatrixAnswer,
   matrixCellKey,
+  matrixReferenceDefaultPosition,
   newQuestion,
   normalizeApprovedQuestion,
   normalizeDraft,
@@ -207,14 +209,16 @@ Deno.test("matrix questions normalize configuration and replace untrusted refere
     top: "Important",
   });
   deepStrictEqual(
-    draft.matrixReferences?.map(({ row, column, label }) => ({
+    draft.matrixReferences?.map(({ row, column, label, x, y }) => ({
       row,
       column,
       label,
+      x,
+      y,
     })),
     [
-      { row: 0, column: 5, label: "Do now" },
-      { row: 5, column: 0, label: "Defer" },
+      { row: 0, column: 5, label: "Do now", x: 0.24, y: 0.2 },
+      { row: 5, column: 0, label: "Defer", x: 0.24, y: 0.2 },
     ],
   );
   notEqual(draft.matrixReferences?.[0].id, "untrusted-a");
@@ -250,6 +254,23 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
       { matrixReferences: [{ row: 4, column: 0, label: "Outside" }] },
       { matrixReferences: [{ row: 0.5, column: 0, label: "Fractional" }] },
       { matrixReferences: [{ row: 0, column: 0, label: " " }] },
+      {
+        matrixReferences: [{
+          row: 0,
+          column: 0,
+          label: "Partial position",
+          x: 0.5,
+        }],
+      },
+      {
+        matrixReferences: [{
+          row: 0,
+          column: 0,
+          label: "Outside position",
+          x: 0,
+          y: 1,
+        }],
+      },
     ]
   ) {
     throws(
@@ -295,6 +316,79 @@ Deno.test("matrix approval disables demographics and stored matrices receive saf
   deepStrictEqual(stored.matrixReferences?.map((reference) => reference.id), [
     "inside",
   ]);
+  deepStrictEqual(
+    stored.matrixReferences?.map(({ x, y }) => ({ x, y })),
+    [{ x: 0.24, y: 0.2 }],
+  );
+});
+
+Deno.test("matrix reference positions are normalized, preserved, and staggered per cell", () => {
+  deepStrictEqual(matrixReferenceDefaultPosition(0), { x: 0.24, y: 0.2 });
+  deepStrictEqual(matrixReferenceDefaultPosition(1), { x: 0.76, y: 0.2 });
+  deepStrictEqual(clampMatrixReferencePosition(-1), 0.08);
+  deepStrictEqual(clampMatrixReferencePosition(2), 0.92);
+  deepStrictEqual(clampMatrixReferencePosition(Number.NaN), 0.5);
+
+  const stored = normalizeStoredQuestions([{
+    ...newQuestion("matrix_2x2"),
+    matrixReferences: [
+      {
+        id: "positioned",
+        row: 0,
+        column: 0,
+        label: "Positioned",
+        x: 0.4,
+        y: 0.7,
+      },
+      {
+        id: "legacy-same-cell",
+        row: 0,
+        column: 0,
+        label: "Legacy",
+      },
+      {
+        id: "invalid-stored",
+        row: 1,
+        column: 1,
+        label: "Invalid",
+        x: 5,
+        y: -2,
+      },
+    ],
+  }])[0].matrixReferences;
+
+  deepStrictEqual(
+    stored?.map(({ id, x, y }) => ({ id, x, y })),
+    [
+      { id: "positioned", x: 0.4, y: 0.7 },
+      { id: "legacy-same-cell", x: 0.76, y: 0.2 },
+      { id: "invalid-stored", x: 0.24, y: 0.2 },
+    ],
+  );
+
+  const draft = normalizeDraft({
+    type: "matrix_2x2",
+    prompt: "Place it",
+    options: [],
+    matrixSize: 2,
+    matrixAxisLabels: {
+      left: "Low",
+      right: "High",
+      bottom: "Easy",
+      top: "Hard",
+    },
+    matrixReferences: [{
+      row: 1,
+      column: 0,
+      label: "Custom",
+      x: 0.31,
+      y: 0.84,
+    }],
+  });
+  deepStrictEqual(
+    draft.matrixReferences?.map(({ x, y }) => ({ x, y })),
+    [{ x: 0.31, y: 0.84 }],
+  );
 });
 
 Deno.test("matrix helpers, sanitization, and aggregation enforce cell bounds", () => {

@@ -22,6 +22,9 @@ export interface MatrixReference {
   row: number;
   column: number;
   label: string;
+  /** Normalized annotation center within the reference cell. */
+  x?: number;
+  y?: number;
 }
 
 export interface MatrixAnswer {

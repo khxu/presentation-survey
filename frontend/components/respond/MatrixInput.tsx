@@ -2,7 +2,7 @@
 import type { MatrixAnswer, Question } from "../../../shared/types.ts";
 import { isMatrixAnswer, matrixCellKey } from "../../../shared/questions.ts";
 import {
-  MatrixCellMarkers,
+  MatrixCellAnnotations,
   MatrixReferenceLegend,
   matrixReferenceText,
 } from "../MatrixCellReferences.tsx";
@@ -65,11 +65,10 @@ export function MatrixInput({ q, value, onChange }: Props) {
                 }`}
               >
                 {cellReferences.length > 0 && (
-                  <MatrixCellMarkers
+                  <MatrixCellAnnotations
                     references={references}
                     cellReferences={cellReferences}
                     size={size}
-                    className={`absolute inset-2 ${on ? "pr-4" : ""}`}
                   />
                 )}
                 {on && (

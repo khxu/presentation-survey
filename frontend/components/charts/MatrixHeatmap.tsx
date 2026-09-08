@@ -2,7 +2,7 @@
 import type { FacetGroup, Question } from "../../../shared/types.ts";
 import { matrixCellKey } from "../../../shared/questions.ts";
 import {
-  MatrixCellMarkers,
+  MatrixCellAnnotations,
   MatrixReferenceLegend,
   matrixReferenceText,
 } from "../MatrixCellReferences.tsx";
@@ -56,7 +56,6 @@ function GroupHeatmap(
   const counts = aggregate?.matrixCounts ?? {};
   const responseCount = aggregate?.responseCount ?? 0;
   const max = Math.max(1, ...Object.values(counts));
-  const countPadding = size === 2 ? "pb-12" : size === 4 ? "pb-8" : "pb-4";
 
   return (
     <div className="mx-auto max-w-xl">
@@ -96,9 +95,7 @@ function GroupHeatmap(
               }}
             >
               <div className="flex h-full min-h-0 flex-col text-center">
-                <div
-                  className={`flex min-h-0 flex-1 flex-col items-center justify-center ${countPadding}`}
-                >
+                <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
                   <span
                     className={`font-black leading-none ${
                       size === 6 ? "text-sm sm:text-lg" : "text-2xl sm:text-3xl"
@@ -110,11 +107,10 @@ function GroupHeatmap(
                     {percent}%
                   </span>
                 </div>
-                <MatrixCellMarkers
+                <MatrixCellAnnotations
                   references={references}
                   cellReferences={cellReferences}
                   size={size}
-                  className="absolute inset-x-1 bottom-1"
                 />
               </div>
             </div>

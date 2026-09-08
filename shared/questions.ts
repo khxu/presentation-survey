@@ -21,6 +21,20 @@ export const QUESTION_LIMITS = {
 };
 
 export const MATRIX_SIZES: MatrixSize[] = [2, 4, 6];
+export const MATRIX_REFERENCE_POSITION_MIN = 0.08;
+export const MATRIX_REFERENCE_POSITION_MAX = 0.92;
+
+const MATRIX_REFERENCE_DEFAULT_POSITIONS = [
+  { x: 0.24, y: 0.2 },
+  { x: 0.76, y: 0.2 },
+  { x: 0.24, y: 0.8 },
+  { x: 0.76, y: 0.8 },
+  { x: 0.5, y: 0.2 },
+  { x: 0.2, y: 0.5 },
+  { x: 0.8, y: 0.5 },
+  { x: 0.5, y: 0.8 },
+  { x: 0.5, y: 0.5 },
+] as const;
 
 export const DEFAULT_MATRIX_AXIS_LABELS: MatrixAxisLabels = {
   left: "Left",
@@ -123,6 +137,32 @@ export function matrixCellKey(row: number, column: number): string {
   return `${row},${column}`;
 }
 
+export function clampMatrixReferencePosition(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  const clamped = Math.min(
+    MATRIX_REFERENCE_POSITION_MAX,
+    Math.max(MATRIX_REFERENCE_POSITION_MIN, value),
+  );
+  return Math.round(clamped * 1000) / 1000;
+}
+
+export function matrixReferenceDefaultPosition(
+  indexInCell: number,
+): { x: number; y: number } {
+  const normalized = Math.max(0, Math.floor(indexInCell));
+  const base = MATRIX_REFERENCE_DEFAULT_POSITIONS[
+    normalized % MATRIX_REFERENCE_DEFAULT_POSITIONS.length
+  ];
+  const cycle = Math.floor(
+    normalized / MATRIX_REFERENCE_DEFAULT_POSITIONS.length,
+  );
+  const offset = cycle === 0 ? 0 : ((cycle % 5) - 2) * 0.025;
+  return {
+    x: clampMatrixReferencePosition(base.x + offset),
+    y: clampMatrixReferencePosition(base.y - offset),
+  };
+}
+
 export function isMatrixAnswer(
   raw: unknown,
   size: MatrixSize,
@@ -171,6 +211,7 @@ function normalizeStoredReferences(
   size: MatrixSize,
 ): MatrixReference[] {
   if (!Array.isArray(raw)) return [];
+  const cellCounts = new Map<string, number>();
   return referencesWithinSize(
     raw.flatMap((reference) => {
       if (
@@ -181,13 +222,26 @@ function normalizeStoredReferences(
       ) {
         return [];
       }
+      const stored = reference as MatrixReference;
+      const key = matrixCellKey(stored.row, stored.column);
+      const indexInCell = cellCounts.get(key) ?? 0;
+      cellCounts.set(key, indexInCell + 1);
+      const fallback = matrixReferenceDefaultPosition(indexInCell);
       return [{
-        ...(reference as MatrixReference),
-        label: (reference as MatrixReference).label.trim(),
+        ...stored,
+        label: stored.label.trim(),
+        x: validStoredReferencePosition(stored.x) ? stored.x : fallback.x,
+        y: validStoredReferencePosition(stored.y) ? stored.y : fallback.y,
       }];
     }).slice(0, QUESTION_LIMITS.matrixReferences),
     size,
   );
+}
+
+function validStoredReferencePosition(raw: unknown): raw is number {
+  return typeof raw === "number" && Number.isFinite(raw) &&
+    raw >= MATRIX_REFERENCE_POSITION_MIN &&
+    raw <= MATRIX_REFERENCE_POSITION_MAX;
 }
 
 function matrixAxisLabels(raw: unknown): MatrixAxisLabels {
@@ -214,6 +268,7 @@ function matrixReferences(raw: unknown, size: MatrixSize): MatrixReference[] {
       `Provide no more than ${QUESTION_LIMITS.matrixReferences} matrix reference labels.`,
     );
   }
+  const cellCounts = new Map<string, number>();
   return raw.map((reference) => {
     const input = record(reference);
     const row = input.row;
@@ -227,6 +282,22 @@ function matrixReferences(raw: unknown, size: MatrixSize): MatrixReference[] {
         "Matrix reference cells must be within the selected grid.",
       );
     }
+    const key = matrixCellKey(row, column);
+    const indexInCell = cellCounts.get(key) ?? 0;
+    cellCounts.set(key, indexInCell + 1);
+    const fallback = matrixReferenceDefaultPosition(indexInCell);
+    const hasX = input.x !== undefined;
+    const hasY = input.y !== undefined;
+    if (
+      hasX !== hasY ||
+      (hasX &&
+        (!validStoredReferencePosition(input.x) ||
+          !validStoredReferencePosition(input.y)))
+    ) {
+      throw new QuestionValidationError(
+        `Matrix reference positions must be between ${MATRIX_REFERENCE_POSITION_MIN} and ${MATRIX_REFERENCE_POSITION_MAX}.`,
+      );
+    }
     return {
       id: crypto.randomUUID(),
       row,
@@ -236,6 +307,8 @@ function matrixReferences(raw: unknown, size: MatrixSize): MatrixReference[] {
         QUESTION_LIMITS.matrixReferenceLabel,
         "Matrix reference label",
       ),
+      x: hasX ? input.x as number : fallback.x,
+      y: hasY ? input.y as number : fallback.y,
     };
   });
 }

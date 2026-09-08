@@ -1,5 +1,9 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
 import type { MatrixReference, MatrixSize } from "../../shared/types.ts";
+import {
+  clampMatrixReferencePosition,
+  matrixReferenceDefaultPosition,
+} from "../../shared/questions.ts";
 
 const MARKER_COLORS = [
   "#dc2626",
@@ -163,6 +167,167 @@ export function MatrixCellMarkers(
       )}
     </span>
   );
+}
+
+export function MatrixCellAnnotations(
+  {
+    references,
+    cellReferences,
+    size,
+    editable = false,
+    onPositionChange,
+    className = "",
+  }: {
+    references: MatrixReference[];
+    cellReferences: MatrixReference[];
+    size: MatrixSize;
+    editable?: boolean;
+    onPositionChange?: (id: string, x: number, y: number) => void;
+    className?: string;
+  },
+) {
+  const referenceIndexes = new Map(
+    references.map((reference, index) => [reference.id, index]),
+  );
+  const visibleReferences = cellReferences.filter((reference) =>
+    reference.label.trim()
+  );
+  if (visibleReferences.length === 0) return null;
+
+  return (
+    <span
+      className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
+      aria-hidden={editable ? undefined : "true"}
+    >
+      {visibleReferences.map((reference, indexInCell) => {
+        const fallback = matrixReferenceDefaultPosition(indexInCell);
+        const x = reference.x ?? fallback.x;
+        const y = reference.y ?? fallback.y;
+        const index = referenceIndexes.get(reference.id) ?? 0;
+        const sizeClasses = matrixAnnotationSizeClasses(size);
+        return editable
+          ? (
+            <button
+              type="button"
+              key={reference.id}
+              title={`${reference.label} — drag or use arrow keys to reposition`}
+              aria-label={`Position ${reference.label}`}
+              className={`pointer-events-auto absolute flex touch-none select-none items-center border border-gray-300 bg-white/95 font-semibold text-gray-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-move ${sizeClasses.annotation}`}
+              style={matrixReferencePositionStyle(x, y)}
+              onClick={(event: any) => event.stopPropagation()}
+              onPointerDown={(event: any) => {
+                event.stopPropagation();
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event: any) => {
+                if (
+                  !onPositionChange ||
+                  !event.currentTarget.hasPointerCapture(event.pointerId)
+                ) {
+                  return;
+                }
+                const cell = event.currentTarget.parentElement;
+                if (!cell) return;
+                const bounds = cell.getBoundingClientRect();
+                if (!bounds.width || !bounds.height) return;
+                onPositionChange(
+                  reference.id,
+                  clampMatrixReferencePosition(
+                    (event.clientX - bounds.left) / bounds.width,
+                  ),
+                  clampMatrixReferencePosition(
+                    (event.clientY - bounds.top) / bounds.height,
+                  ),
+                );
+              }}
+              onPointerUp={(event: any) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+                }
+              }}
+              onKeyDown={(event: any) => {
+                if (!onPositionChange) return;
+                const step = event.shiftKey ? 0.1 : 0.025;
+                const offsets: Record<string, [number, number]> = {
+                  ArrowLeft: [-step, 0],
+                  ArrowRight: [step, 0],
+                  ArrowUp: [0, -step],
+                  ArrowDown: [0, step],
+                };
+                const offset = offsets[event.key];
+                if (!offset) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onPositionChange(
+                  reference.id,
+                  clampMatrixReferencePosition(x + offset[0]),
+                  clampMatrixReferencePosition(y + offset[1]),
+                );
+              }}
+            >
+              <MatrixReferenceMarker
+                index={index}
+                className={sizeClasses.marker}
+              />
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                {reference.label}
+              </span>
+            </button>
+          )
+          : (
+            <span
+              key={reference.id}
+              title={reference.label}
+              className={`absolute flex items-center border border-gray-300 bg-white/95 font-semibold text-gray-900 shadow-sm ${sizeClasses.annotation}`}
+              style={matrixReferencePositionStyle(x, y)}
+            >
+              <MatrixReferenceMarker
+                index={index}
+                className={sizeClasses.marker}
+              />
+              <span className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+                {reference.label}
+              </span>
+            </span>
+          );
+      })}
+    </span>
+  );
+}
+
+export function matrixReferencePositionStyle(
+  x: number,
+  y: number,
+): { left: string; top: string; transform: string } {
+  return {
+    left: `${clampMatrixReferencePosition(x) * 100}%`,
+    top: `${clampMatrixReferencePosition(y) * 100}%`,
+    transform: "translate(-50%, -50%)",
+  };
+}
+
+export function matrixAnnotationSizeClasses(
+  size: MatrixSize,
+): { annotation: string; marker: string } {
+  if (size === 2) {
+    return {
+      annotation:
+        "max-w-[88%] gap-1 rounded-md px-1 py-0.5 text-[10px] leading-tight sm:text-xs",
+      marker: "h-4 w-4 sm:h-5 sm:w-5",
+    };
+  }
+  if (size === 4) {
+    return {
+      annotation:
+        "max-w-[94%] gap-0.5 rounded px-0.5 py-px text-[7px] leading-tight sm:text-[9px]",
+      marker: "h-2.5 w-2.5 sm:h-3 sm:w-3",
+    };
+  }
+  return {
+    annotation:
+      "max-w-[96%] gap-px rounded-sm px-px py-px text-[5px] leading-none sm:text-[7px]",
+    marker: "h-2 w-2 sm:h-2.5 sm:w-2.5",
+  };
 }
 
 export function MatrixReferenceLegend(
