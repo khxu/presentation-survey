@@ -1,8 +1,9 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
 import {
   canonicalizeChoiceSelection,
-  isMatrixAnswer,
+  normalizeMatrixAnswer,
   normalizeStoredQuestions,
+  QUESTION_LIMITS,
 } from "../shared/questions.ts";
 import { ensureSchema, randomId, sha256, sqlite } from "./db.ts";
 import { RequestError } from "./errors.ts";
@@ -132,15 +133,25 @@ export async function updateSurvey(
         409,
       );
     }
-    if (
-      patch.questions.some((question) =>
-        question.type === "matrix_2x2" && question.matrixSize !== 2
-      )
-    ) {
-      throw new RequestError(
-        "Only 2x2 matrix questions are supported.",
-        400,
-      );
+    for (const question of patch.questions) {
+      if (question.type !== "matrix_2x2") continue;
+      if (question.matrixSize !== 2) {
+        throw new RequestError(
+          "Only 2x2 matrix questions are supported.",
+          400,
+        );
+      }
+      if (
+        typeof question.matrixSubjectLabel !== "string" ||
+        !question.matrixSubjectLabel.trim() ||
+        question.matrixSubjectLabel.trim().length >
+          QUESTION_LIMITS.matrixSubjectLabel
+      ) {
+        throw new RequestError(
+          `Matrix subject label must contain 1-${QUESTION_LIMITS.matrixSubjectLabel} characters.`,
+          400,
+        );
+      }
     }
     const currentResult = await sqlite.execute({
       sql: `SELECT questions_json FROM surveys WHERE id = ?`,
@@ -167,6 +178,9 @@ export async function updateSurvey(
       ...q,
       position: i,
       released: q.released === true,
+      ...(q.type === "matrix_2x2"
+        ? { matrixSubjectLabel: q.matrixSubjectLabel!.trim() }
+        : {}),
     }));
     sets.push("questions_json = ?"), args.push(JSON.stringify(qs));
   }
@@ -332,9 +346,8 @@ export function sanitizeAnswers(survey: Survey, raw: unknown): Answers {
         break;
       case "matrix_2x2": {
         const size = q.matrixSize ?? 2;
-        if (isMatrixAnswer(v, size)) {
-          out[q.id] = { row: v.row, column: v.column };
-        }
+        const answer = normalizeMatrixAnswer(v, size);
+        if (answer) out[q.id] = answer;
         break;
       }
     }

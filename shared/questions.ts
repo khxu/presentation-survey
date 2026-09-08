@@ -15,6 +15,7 @@ export const QUESTION_LIMITS = {
   optionLabel: 120,
   options: 20,
   scaleSteps: 21,
+  matrixSubjectLabel: 120,
   matrixAxisLabel: 60,
   matrixReferenceLabel: 120,
   matrixReferences: 100,
@@ -75,6 +76,7 @@ export function newQuestion(type: QuestionType = "single_choice"): Question {
     ...(type === "matrix_2x2"
       ? {
         matrixSize: 2 as MatrixSize,
+        matrixSubjectLabel: "",
         matrixAxisLabels: { ...DEFAULT_MATRIX_AXIS_LABELS },
         matrixReferences: [],
       }
@@ -109,6 +111,13 @@ export function normalizeStoredQuestions(raw: unknown): Question[] {
       ...(stored.type === "matrix_2x2"
         ? {
           matrixSize: 2 as MatrixSize,
+          matrixSubjectLabel: typeof stored.matrixSubjectLabel === "string" &&
+              stored.matrixSubjectLabel.trim()
+            ? stored.matrixSubjectLabel.trim().slice(
+              0,
+              QUESTION_LIMITS.matrixSubjectLabel,
+            )
+            : "Item",
           matrixAxisLabels: normalizeStoredAxisLabels(stored.matrixAxisLabels),
           matrixReferences: normalizeStoredReferences(
             stored.matrixReferences,
@@ -189,15 +198,59 @@ export function matrixReferenceDefaultPositions(
   };
 }
 
-export function isMatrixAnswer(
-  raw: unknown,
-  size: MatrixSize,
-): raw is MatrixAnswer {
+export function isMatrixAnswer(raw: unknown): raw is MatrixAnswer {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
   const answer = raw as Partial<MatrixAnswer>;
-  return Number.isInteger(answer.row) && Number.isInteger(answer.column) &&
-    answer.row! >= 0 && answer.row! < size &&
-    answer.column! >= 0 && answer.column! < size;
+  return validMatrixCoordinate(answer.x) && validMatrixCoordinate(answer.y);
+}
+
+export function normalizeMatrixAnswer(
+  raw: unknown,
+  size: MatrixSize,
+): MatrixAnswer | null {
+  if (isMatrixAnswer(raw)) {
+    return {
+      x: roundMatrixCoordinate(raw.x),
+      y: roundMatrixCoordinate(raw.y),
+    };
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const legacy = raw as { row?: unknown; column?: unknown };
+  if (
+    !Number.isInteger(legacy.row) || !Number.isInteger(legacy.column) ||
+    (legacy.row as number) < 0 || (legacy.row as number) >= size ||
+    (legacy.column as number) < 0 || (legacy.column as number) >= size
+  ) {
+    return null;
+  }
+  return {
+    x: roundMatrixCoordinate(((legacy.column as number) + 0.5) / size),
+    y: roundMatrixCoordinate(((legacy.row as number) + 0.5) / size),
+  };
+}
+
+export function matrixAnswerCell(
+  answer: MatrixAnswer,
+  size: MatrixSize,
+): { row: number; column: number } {
+  return {
+    row: Math.min(size - 1, Math.floor(answer.y * size)),
+    column: Math.min(size - 1, Math.floor(answer.x * size)),
+  };
+}
+
+export function clampMatrixAnswerPosition(value: number): number {
+  if (!Number.isFinite(value)) return 0.5;
+  return roundMatrixCoordinate(Math.min(1, Math.max(0, value)));
+}
+
+function validMatrixCoordinate(raw: unknown): raw is number {
+  return typeof raw === "number" && Number.isFinite(raw) && raw >= 0 &&
+    raw <= 1;
+}
+
+function roundMatrixCoordinate(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }
 
 export function referencesWithinSize(
@@ -441,6 +494,11 @@ export function normalizeDraft(raw: unknown): QuestionDraft {
       throw new QuestionValidationError("Choose a 2x2 matrix.");
     }
     draft.matrixSize = input.matrixSize;
+    draft.matrixSubjectLabel = text(
+      input.matrixSubjectLabel,
+      QUESTION_LIMITS.matrixSubjectLabel,
+      "Matrix subject label",
+    );
     draft.matrixAxisLabels = matrixAxisLabels(input.matrixAxisLabels);
     draft.matrixReferences = matrixReferences(
       input.matrixReferences,

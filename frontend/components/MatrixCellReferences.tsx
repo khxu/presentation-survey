@@ -313,8 +313,8 @@ function MatrixReferenceAnnotation(
           <>
             <button
               type="button"
-              title={`Symbol for ${reference.label} — ${commonTitle}`}
-              aria-label={`Position symbol for ${reference.label}`}
+              title={`Comparison symbol for ${reference.label} — ${commonTitle}`}
+              aria-label={`Position comparison symbol for ${reference.label}`}
               className="pointer-events-auto absolute flex h-7 w-7 touch-none select-none items-center justify-center rounded-full border border-gray-300 bg-white/95 shadow-sm cursor-move focus:outline-none focus:ring-2 focus:ring-indigo-600"
               style={matrixReferencePositionStyle(symbolX, symbolY)}
               {...positionControlProps(
@@ -332,8 +332,8 @@ function MatrixReferenceAnnotation(
               ref={(element: HTMLElement | null) => {
                 labelRef.current = element;
               }}
-              title={`Label for ${reference.label} — ${commonTitle}`}
-              aria-label={`Position label for ${reference.label}`}
+              title={`Comparison label for ${reference.label} — ${commonTitle}`}
+              aria-label={`Position comparison label for ${reference.label}`}
               className="pointer-events-auto absolute max-w-[88%] touch-none select-none rounded-md border border-gray-300 bg-white/95 px-1.5 py-1 text-center text-[10px] font-semibold leading-tight text-gray-900 shadow-sm cursor-move break-words sm:text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
               style={matrixReferencePositionStyle(
                 visibleLabelPosition.x,
@@ -564,7 +564,7 @@ export function MatrixReferenceLegend(
       className={`rounded-xl border border-gray-200 bg-white p-3 ${className}`}
     >
       <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-        Reference positions
+        Comparison points
       </p>
       <div className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
         {visibleReferences.map((reference) => {

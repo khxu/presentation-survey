@@ -2,14 +2,16 @@ import type {
   Answers,
   FacetGroup,
   IRVRound,
+  MatrixAnswer,
   Question,
   QuestionAggregate,
   Survey,
 } from "../shared/types.ts";
 import {
   canonicalizeChoiceSelection,
-  isMatrixAnswer,
+  matrixAnswerCell,
   matrixCellKey,
+  normalizeMatrixAnswer,
 } from "../shared/questions.ts";
 
 /** Instant-runoff voting: returns each round's tallies until a majority winner emerges. */
@@ -189,13 +191,18 @@ export function aggregateQuestion(
         }
       }
       let validCount = 0;
+      const points: MatrixAnswer[] = [];
       for (const value of vals) {
-        if (!isMatrixAnswer(value, size)) continue;
-        counts[matrixCellKey(value.row, value.column)]++;
+        const answer = normalizeMatrixAnswer(value, size);
+        if (!answer) continue;
+        const cell = matrixAnswerCell(answer, size);
+        counts[matrixCellKey(cell.row, cell.column)]++;
+        points.push(answer);
         validCount++;
       }
       agg.responseCount = validCount;
       agg.matrixCounts = counts;
+      agg.matrixPoints = points;
       break;
     }
   }

@@ -1,6 +1,7 @@
 import { deepStrictEqual } from "node:assert/strict";
 import type { Question, Survey } from "../shared/types.ts";
 import { aggregateQuestion, buildResults } from "./aggregate.ts";
+import { newQuestion } from "../shared/questions.ts";
 
 function multiChoice(id = "tools"): Question {
   return {
@@ -115,4 +116,28 @@ Deno.test("faceted results aggregate independent pick-many intersections", () =>
       },
     ],
   );
+});
+
+Deno.test("matrix aggregation returns points and derived quadrant counts", () => {
+  const q = {
+    ...newQuestion("matrix_2x2"),
+    id: "matrix",
+    matrixSubjectLabel: "Initiative",
+  };
+  const aggregate = aggregateQuestion(q, [
+    { matrix: { x: 0.1, y: 0.2 } },
+    { matrix: { x: 0.9, y: 0.8 } },
+    { matrix: { row: 0, column: 1 } } as any,
+  ]);
+  deepStrictEqual(aggregate.matrixPoints, [
+    { x: 0.1, y: 0.2 },
+    { x: 0.9, y: 0.8 },
+    { x: 0.75, y: 0.25 },
+  ]);
+  deepStrictEqual(aggregate.matrixCounts, {
+    "0,0": 1,
+    "0,1": 1,
+    "1,0": 0,
+    "1,1": 1,
+  });
 });

@@ -60,8 +60,25 @@ export function MatrixEditor({ q, onChange }: Props) {
     <div className="space-y-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span className="font-medium">2×2 grid</span>
-        <span className="text-xs text-gray-500">4 selectable cells</span>
+        <span className="text-xs text-gray-500">
+          continuous respondent placement
+        </span>
       </div>
+
+      <label className="block text-xs font-medium text-gray-600">
+        Symbol label
+        <input
+          value={q.matrixSubjectLabel ?? ""}
+          maxLength={QUESTION_LIMITS.matrixSubjectLabel}
+          onChange={(event: any) =>
+            set({ matrixSubjectLabel: event.target.value })}
+          placeholder="Item respondents will place"
+          className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-800"
+        />
+        <span className="mt-1 block font-normal text-gray-500">
+          Shown directly on the symbol respondents drag into the grid.
+        </span>
+      </label>
 
       <div className="grid gap-2 sm:grid-cols-2">
         {(["left", "right", "bottom", "top"] as const).map((key) => (
@@ -85,9 +102,9 @@ export function MatrixEditor({ q, onChange }: Props) {
 
       <div>
         <p className="mb-2 text-xs text-gray-500">
-          Select a cell, then add comparison items that respondents should see
-          there. Drag the symbol and its label separately, or focus either one
-          and use the arrow keys, to position them within the cell.
+          Select a cell, then add optional comparison points that respondents
+          should see there. Drag the symbol and its label separately, or focus
+          either one and use the arrow keys, to position them within the cell.
         </p>
         <div className="mx-auto max-w-md">
           <div className="mb-1 text-center text-xs font-semibold text-gray-600">
@@ -120,9 +137,9 @@ export function MatrixEditor({ q, onChange }: Props) {
                   <button
                     type="button"
                     onClick={() => setSelectedKey(key)}
-                    aria-label={`Edit references in column ${column + 1}, row ${
-                      row + 1
-                    } from top${
+                    aria-label={`Edit comparison points in column ${
+                      column + 1
+                    }, row ${row + 1} from top${
                       referenceText ? `. Reference items: ${referenceText}` : ""
                     }`}
                     title={referenceText || undefined}
@@ -166,9 +183,8 @@ export function MatrixEditor({ q, onChange }: Props) {
       <div className="rounded-lg border bg-white p-3">
         <div className="flex items-center gap-2">
           <p className="flex-1 text-sm font-semibold">
-            References in column {selectedColumn + 1}, row {selectedRow + 1}
-            {" "}
-            from top
+            Comparison points in column {selectedColumn + 1}, row{" "}
+            {selectedRow + 1} from top
           </p>
           <button
             type="button"
@@ -192,12 +208,12 @@ export function MatrixEditor({ q, onChange }: Props) {
             }}
             className="text-sm text-indigo-600 hover:underline disabled:opacity-40"
           >
-            + add reference
+            + add comparison point
           </button>
         </div>
         {selectedReferences.length === 0 && (
           <p className="mt-2 text-xs text-gray-400">
-            No comparison items in this cell.
+            No comparison points in this cell.
           </p>
         )}
         <div className="mt-2 space-y-2">
@@ -205,9 +221,9 @@ export function MatrixEditor({ q, onChange }: Props) {
             <div key={reference.id} className="flex items-center gap-2">
               <input
                 value={reference.label}
-                aria-label={`Reference ${index + 1}`}
+                aria-label={`Comparison point ${index + 1}`}
                 maxLength={QUESTION_LIMITS.matrixReferenceLabel}
-                placeholder="Comparison item"
+                placeholder="Comparison point"
                 onChange={(event: any) =>
                   set({
                     matrixReferences: references.map((item) =>

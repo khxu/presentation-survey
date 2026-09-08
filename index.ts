@@ -33,7 +33,10 @@ import {
   setProposalVote,
 } from "./backend/proposals.ts";
 import { RequestError } from "./backend/errors.ts";
-import { QuestionValidationError } from "./shared/questions.ts";
+import {
+  normalizeMatrixAnswer,
+  QuestionValidationError,
+} from "./shared/questions.ts";
 import type { Survey } from "./shared/types.ts";
 
 const app = new Hono();
@@ -309,10 +312,16 @@ admin.get("/export.csv", async (c) => {
         return esc(v.map((x) => optLabel(q, x)).join(" > "));
       }
       if (
-        q.type === "matrix_2x2" && v && typeof v === "object" &&
-        Number.isInteger(v.row) && Number.isInteger(v.column)
+        q.type === "matrix_2x2"
       ) {
-        return esc(`column ${v.column + 1}, row ${v.row + 1} from top`);
+        const position = normalizeMatrixAnswer(v, q.matrixSize ?? 2);
+        if (position) {
+          return esc(
+            `x ${position.x.toFixed(3)}, y ${
+              position.y.toFixed(3)
+            } from top-left`,
+          );
+        }
       }
       if (typeof v === "string" && q.options.length) return esc(optLabel(q, v));
       return esc(v);

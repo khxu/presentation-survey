@@ -30,8 +30,9 @@ export interface MatrixReference {
 }
 
 export interface MatrixAnswer {
-  row: number;
-  column: number;
+  /** Normalized position across the full matrix, measured from top-left. */
+  x: number;
+  y: number;
 }
 
 export interface Option {
@@ -48,6 +49,7 @@ export interface Question {
   scaleMin?: number; // for scale
   scaleMax?: number;
   matrixSize?: MatrixSize;
+  matrixSubjectLabel?: string;
   matrixAxisLabels?: MatrixAxisLabels;
   matrixReferences?: MatrixReference[];
   isDemographic: boolean;
@@ -76,6 +78,7 @@ export type QuestionDraft = Pick<
   | "scaleMin"
   | "scaleMax"
   | "matrixSize"
+  | "matrixSubjectLabel"
   | "matrixAxisLabels"
   | "matrixReferences"
 >;
@@ -96,7 +99,7 @@ export interface ProposalsPayload {
 
 /** Answer values: single -> optionId; multi -> optionId[]; scale -> number;
  * free_text/word_cloud -> string; ranked_choice -> optionId[] (ordered);
- * emoji -> optionId; matrix -> zero-based row/column. */
+ * emoji -> optionId; matrix -> normalized x/y coordinates. */
 export type AnswerValue = string | number | string[] | MatrixAnswer;
 
 export type Answers = Record<string, AnswerValue>;
@@ -133,6 +136,8 @@ export interface QuestionAggregate {
   firstChoice?: Record<string, number>;
   /** For matrix questions: counts keyed by "row,column". */
   matrixCounts?: Record<string, number>;
+  /** For matrix questions: normalized response positions. */
+  matrixPoints?: MatrixAnswer[];
 }
 
 export interface FacetGroup {

@@ -210,6 +210,7 @@ Deno.test("API: invalid input, closed surveys, and cross-survey operations", asy
       prompt: "Unsupported matrix",
       options: [],
       matrixSize: 4,
+      matrixSubjectLabel: "Unsupported",
       matrixAxisLabels: {
         left: "Left",
         right: "Right",
@@ -231,6 +232,25 @@ Deno.test("API: invalid input, closed surveys, and cross-survey operations", asy
     deepStrictEqual(
       (await request(`/api/admin/${a.adminKey}`, "PATCH", {
         questions: [unsupportedMatrix],
+        expectedQuestions: [],
+      })).status,
+      400,
+    );
+    const missingMatrixLabel = {
+      ...unsupportedMatrix,
+      id: "missing-matrix-label",
+      matrixSize: 2,
+      matrixSubjectLabel: "",
+    };
+    deepStrictEqual(
+      (await request(`/api/s/${a.slug}/proposals`, "POST", {
+        question: missingMatrixLabel,
+      })).status,
+      400,
+    );
+    deepStrictEqual(
+      (await request(`/api/admin/${a.adminKey}`, "PATCH", {
+        questions: [missingMatrixLabel],
         expectedQuestions: [],
       })).status,
       400,
@@ -569,6 +589,7 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
       prompt: "Where should the migration go?",
       options: [],
       matrixSize: 2,
+      matrixSubjectLabel: "Migration",
       matrixAxisLabels: {
         left: "Not urgent",
         right: "Urgent",
@@ -618,9 +639,15 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
     deepStrictEqual(approval.status, 200);
     const approved = (await approval.json()).approvedQuestion as Question;
     deepStrictEqual(
-      [approved.type, approved.required, approved.isDemographic],
+      [
+        approved.type,
+        approved.matrixSubjectLabel,
+        approved.required,
+        approved.isDemographic,
+      ],
       [
         "matrix_2x2",
+        "Migration",
         true,
         false,
       ],
@@ -648,7 +675,7 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
     const first = await request(`/api/s/${slug}`);
     const cookie = first.headers.get("set-cookie")!.split(";")[0];
     const invalid = await request(`/api/s/${slug}/respond`, "POST", {
-      answers: { [approved.id]: { row: 2, column: 0 } },
+      answers: { [approved.id]: { x: 1.2, y: 0.5 } },
     }, cookie);
     deepStrictEqual((await invalid.json()).answers, {});
 
@@ -656,13 +683,16 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
       answers: { [approved.id]: { row: 0, column: 1, ignored: true } },
     }, cookie);
     deepStrictEqual((await valid.json()).answers, {
-      [approved.id]: { row: 0, column: 1 },
+      [approved.id]: { x: 0.75, y: 0.25 },
     });
 
     const results = await (await request(`/api/admin/${adminKey}/results`))
       .json();
     deepStrictEqual(results.groups[0].aggregates[0].responseCount, 1);
     deepStrictEqual(results.groups[0].aggregates[0].matrixCounts["0,1"], 1);
+    deepStrictEqual(results.groups[0].aggregates[0].matrixPoints, [
+      { x: 0.75, y: 0.25 },
+    ]);
     deepStrictEqual(
       Object.keys(results.groups[0].aggregates[0].matrixCounts).length,
       4,
@@ -670,7 +700,11 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
 
     const csv = await request(`/api/admin/${adminKey}/export.csv`);
     deepStrictEqual(csv.status, 200);
-    ok((await csv.text()).includes('"column 2, row 1 from top"'));
+    ok(
+      (await csv.text()).includes(
+        '"x 0.750, y 0.250 from top-left"',
+      ),
+    );
   } finally {
     await request(`/api/admin/${adminKey}`, "DELETE");
   }
