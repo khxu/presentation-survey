@@ -58,16 +58,16 @@ are limited to 16 KB.
 
 ## Question types
 
-| Type                                | Respondent sees                                                                                      | Results visualization                                                                                                                     |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Multiple choice (one)               | Tappable cards                                                                                       | Colored bar chart; grouped bars when faceted                                                                                              |
-| Multiple choice (many)              | Tappable cards                                                                                       | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
-| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                                          | Heat-colored histogram + animated mean                                                                                                    |
-| **Ranked choice**                   | Tap-to-rank list with reorder                                                                        | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
-| Word cloud                          | Single word/phrase                                                                                   | Sized, tilted word cloud                                                                                                                  |
-| Free text                           | Textarea                                                                                             | Sticky-note wall                                                                                                                          |
-| Emoji reaction                      | Emoji grid                                                                                           | Floating emoji bubbles scaled by count                                                                                                    |
-| **2×2 matrix**                      | Tappable 2×2, 4×4, or 6×6 grid with axis endpoints, reference symbols, and a labeled position legend | Cell heatmap with counts, percentages, matching symbols, and a position legend; one heatmap per facet group                               |
+| Type                                | Respondent sees                                                                                          | Results visualization                                                                                                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple choice (one)               | Tappable cards                                                                                           | Colored bar chart; grouped bars when faceted                                                                                              |
+| Multiple choice (many)              | Tappable cards                                                                                           | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
+| Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                                              | Heat-colored histogram + animated mean                                                                                                    |
+| **Ranked choice**                   | Tap-to-rank list with reorder                                                                            | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
+| Word cloud                          | Single word/phrase                                                                                       | Sized, tilted word cloud                                                                                                                  |
+| Free text                           | Textarea                                                                                                 | Sticky-note wall                                                                                                                          |
+| Emoji reaction                      | Emoji grid                                                                                               | Floating emoji bubbles scaled by count                                                                                                    |
+| **2×2 matrix**                      | Tappable 2×2, 4×4, or 6×6 grid with axis endpoints, positioned symbol-and-label references, and a legend | Cell heatmap with counts, percentages, the same positioned labels, and a legend; one heatmap per facet group                              |
 
 ## Admin controls
 
@@ -91,10 +91,15 @@ are limited to 16 KB.
 
 Matrix answers select one cell for the item named in the question prompt. A 6×6
 matrix represents four 3×3 quadrants and has 36 selectable cells. Reference
-items are read-only context, not additional answers. Each reference uses the
-same shape and color in the grid and legend; its legend entry includes a small
-highlighted grid showing its position. CSV exports describe a placement with
-one-based coordinates such as `column 5, row 2 from top`.
+items are read-only context, not additional answers. Each reference appears in
+its cell as a labeled symbol, and question creators can drag that
+symbol-and-label annotation to avoid visual overlap. The relative placement is
+reused in the builder, respondent grid, and results heatmap at every grid size.
+Each reference uses the same shape and color in the grid and retained legend;
+its legend entry includes a small highlighted grid showing its cell. CSV exports
+describe a placement with one-based coordinates such as
+`column 5, row 2 from
+top`.
 
 ## Architecture
 

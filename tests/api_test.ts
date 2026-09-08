@@ -544,7 +544,14 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
         top: "Important",
       },
       matrixReferences: [
-        { id: "untrusted", row: 0, column: 5, label: "Security patch" },
+        {
+          id: "untrusted",
+          row: 0,
+          column: 5,
+          label: "Security patch",
+          x: 0.34,
+          y: 0.76,
+        },
         { id: "untrusted-2", row: 5, column: 0, label: "Office repaint" },
       ],
     };
@@ -556,6 +563,10 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
     const proposal = (await proposals(slug)).proposals[0];
     deepStrictEqual(proposal.draft.matrixSize, 6);
     notEqual(proposal.draft.matrixReferences?.[0].id, "untrusted");
+    deepStrictEqual(
+      proposal.draft.matrixReferences?.map(({ x, y }) => ({ x, y })),
+      [{ x: 0.34, y: 0.76 }, { x: 0.24, y: 0.2 }],
+    );
 
     const approval = await request(
       `/api/admin/${adminKey}/proposals/${proposal.id}/approve`,
@@ -571,6 +582,10 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
         true,
         false,
       ],
+    );
+    deepStrictEqual(
+      approved.matrixReferences?.map(({ x, y }) => ({ x, y })),
+      [{ x: 0.34, y: 0.76 }, { x: 0.24, y: 0.2 }],
     );
 
     await request(

@@ -4,12 +4,13 @@ import type { MatrixSize, Question } from "../../../shared/types.ts";
 import {
   MATRIX_SIZES,
   matrixCellKey,
+  matrixReferenceDefaultPosition,
   QUESTION_LIMITS,
   referencesWithinSize,
 } from "../../../shared/questions.ts";
 import { uid } from "../../lib/api.ts";
 import {
-  MatrixCellMarkers,
+  MatrixCellAnnotations,
   MatrixReferenceLegend,
   matrixReferenceText,
 } from "../MatrixCellReferences.tsx";
@@ -42,6 +43,14 @@ export function MatrixEditor({ q, onChange }: Props) {
     const column = Math.min(selectedColumn, nextSize - 1);
     setSelectedKey(matrixCellKey(row, column));
     set({ matrixSize: nextSize, matrixReferences: nextReferences });
+  }
+
+  function changeReferencePosition(id: string, x: number, y: number) {
+    set({
+      matrixReferences: references.map((reference) =>
+        reference.id === id ? { ...reference, x, y } : reference
+      ),
+    });
   }
 
   return (
@@ -92,7 +101,8 @@ export function MatrixEditor({ q, onChange }: Props) {
       <div>
         <p className="mb-2 text-xs text-gray-500">
           Select a cell, then add comparison items that respondents should see
-          there.
+          there. Drag a labeled symbol, or focus it and use the arrow keys, to
+          reposition it within the cell.
         </p>
         <div className="mx-auto max-w-md">
           <div className="mb-1 text-center text-xs font-semibold text-gray-600">
@@ -114,40 +124,44 @@ export function MatrixEditor({ q, onChange }: Props) {
               const middleLeft = column === size / 2;
               const referenceText = matrixReferenceText(cellReferences);
               return (
-                <button
-                  type="button"
+                <div
                   key={key}
-                  onClick={() => setSelectedKey(key)}
-                  aria-label={`Edit references in column ${column + 1}, row ${
-                    row + 1
-                  } from top${
-                    referenceText ? `. Reference items: ${referenceText}` : ""
-                  }`}
-                  title={referenceText || undefined}
-                  className={`relative min-w-0 overflow-hidden border-gray-200 p-1 text-left text-[10px] leading-tight ${
-                    selected
-                      ? "z-10 bg-indigo-100 ring-2 ring-inset ring-indigo-600"
-                      : "hover:bg-indigo-50"
-                  } ${
+                  className={`relative min-w-0 overflow-hidden border-gray-200 ${
                     middleTop ? "border-t-2 border-t-gray-500" : "border-t"
                   } ${
                     middleLeft ? "border-l-2 border-l-gray-500" : "border-l"
                   }`}
                 >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKey(key)}
+                    aria-label={`Edit references in column ${column + 1}, row ${
+                      row + 1
+                    } from top${
+                      referenceText ? `. Reference items: ${referenceText}` : ""
+                    }`}
+                    title={referenceText || undefined}
+                    className={`absolute inset-0 text-left ${
+                      selected
+                        ? "bg-indigo-100 ring-2 ring-inset ring-indigo-600"
+                        : "hover:bg-indigo-50"
+                    }`}
+                  />
                   {cellReferences.length > 0 && (
                     <>
-                      <span className="absolute right-1 top-1 rounded-full bg-indigo-600 px-1 text-[9px] text-white">
+                      <span className="pointer-events-none absolute right-1 top-1 z-20 rounded-full bg-indigo-600 px-1 text-[9px] text-white">
                         {cellReferences.length}
                       </span>
-                      <MatrixCellMarkers
+                      <MatrixCellAnnotations
                         references={references}
                         cellReferences={cellReferences}
                         size={size}
-                        className="absolute inset-2 pr-4"
+                        editable
+                        onPositionChange={changeReferencePosition}
                       />
                     </>
                   )}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -174,7 +188,10 @@ export function MatrixEditor({ q, onChange }: Props) {
           <button
             type="button"
             disabled={references.length >= QUESTION_LIMITS.matrixReferences}
-            onClick={() =>
+            onClick={() => {
+              const position = matrixReferenceDefaultPosition(
+                selectedReferences.length,
+              );
               set({
                 matrixReferences: [
                   ...references,
@@ -183,9 +200,11 @@ export function MatrixEditor({ q, onChange }: Props) {
                     row: selectedRow,
                     column: selectedColumn,
                     label: "",
+                    ...position,
                   },
                 ],
-              })}
+              });
+            }}
             className="text-sm text-indigo-600 hover:underline disabled:opacity-40"
           >
             + add reference
