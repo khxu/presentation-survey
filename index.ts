@@ -1,4 +1,7 @@
-import { parseVal, serveImmutableFile } from "https://esm.town/v/std/utils/index.ts";
+import {
+  parseVal,
+  serveImmutableFile,
+} from "https://esm.town/v/std/utils/index.ts";
 import { Hono } from "npm:hono";
 import { bodyLimit } from "npm:hono/body-limit";
 import { HTTPException } from "npm:hono/http-exception";
@@ -10,11 +13,11 @@ import {
   clearResponses,
   createSurvey,
   deleteSurvey,
+  filterAnswers,
   getAllResponses,
   getResponse,
   getSurveyByAdminKey,
   getSurveyBySlug,
-  filterAnswers,
   mergeReleasedAnswers,
   publicSurvey,
   sanitizeAnswers,
@@ -23,7 +26,12 @@ import {
   upsertResponse,
 } from "./backend/surveys.ts";
 import { Root } from "./frontend/root.tsx";
-import { approveProposal, createProposal, listProposals, setProposalVote } from "./backend/proposals.ts";
+import {
+  approveProposal,
+  createProposal,
+  listProposals,
+  setProposalVote,
+} from "./backend/proposals.ts";
 import { RequestError } from "./backend/errors.ts";
 import { QuestionValidationError } from "./shared/questions.ts";
 import type { Survey } from "./shared/types.ts";
@@ -31,7 +39,14 @@ import type { Survey } from "./shared/types.ts";
 const app = new Hono();
 
 // ---- Frontend shell (client-side routing handles the rest) ----
-const SHELL_PATHS = ["/", "/new", "/s/:slug", "/s/:slug/results", "/s/:slug/present", "/admin/:key"];
+const SHELL_PATHS = [
+  "/",
+  "/new",
+  "/s/:slug",
+  "/s/:slug/results",
+  "/s/:slug/present",
+  "/admin/:key",
+];
 for (const p of SHELL_PATHS) app.get(p, (c) => c.html(Root()));
 app.get("/__immutable/*", (c) => serveImmutableFile(c.req.path));
 app.get("/source", (c) => c.redirect(parseVal().links.self.val));
@@ -56,7 +71,8 @@ function getOrSetSid(c: any): string {
 // ---- Public API ----
 const proposalBodyLimit = bodyLimit({
   maxSize: 16 * 1024,
-  onError: (c) => c.json({ error: "Question requests must be smaller than 16 KB." }, 413),
+  onError: (c) =>
+    c.json({ error: "Question requests must be smaller than 16 KB." }, 413),
 });
 
 async function questionBody(req: Request): Promise<Record<string, unknown>> {
@@ -64,7 +80,9 @@ async function questionBody(req: Request): Promise<Record<string, unknown>> {
   try {
     body = await req.json();
   } catch (error) {
-    if (error instanceof SyntaxError) throw new RequestError("Provide valid JSON.", 400);
+    if (error instanceof SyntaxError) {
+      throw new RequestError("Provide valid JSON.", 400);
+    }
     throw error;
   }
   if (!body || typeof body !== "object" || Array.isArray(body)) {
@@ -87,19 +105,28 @@ app.get("/api/s/:slug", async (c) => {
   const sid = getOrSetSid(c);
   const existing = await getResponse(survey.id, sid);
   const visibleSurvey = publicSurvey(survey);
-  return c.json({ survey: visibleSurvey, existing: filterAnswers(existing, visibleSurvey.questions) });
+  return c.json({
+    survey: visibleSurvey,
+    existing: filterAnswers(existing, visibleSurvey.questions),
+  });
 });
 
 app.post("/api/s/:slug/respond", async (c) => {
   const survey = await getSurveyBySlug(c.req.param("slug"));
   if (!survey) return c.json({ error: "Not found" }, 404);
-  if (!survey.acceptingResponses) return c.json({ error: "This survey is closed." }, 403);
+  if (!survey.acceptingResponses) {
+    return c.json({ error: "This survey is closed." }, 403);
+  }
   const sid = getOrSetSid(c);
   const body = await c.req.json().catch(() => ({}));
   const visibleSurvey = publicSurvey(survey);
   const answers = sanitizeAnswers(visibleSurvey, body.answers);
   const existing = await getResponse(survey.id, sid);
-  await upsertResponse(survey.id, sid, mergeReleasedAnswers(existing, visibleSurvey.questions, answers));
+  await upsertResponse(
+    survey.id,
+    sid,
+    mergeReleasedAnswers(existing, visibleSurvey.questions, answers),
+  );
   return c.json({ ok: true, answers });
 });
 
@@ -113,30 +140,55 @@ app.get("/api/s/:slug/proposals", async (c) => {
 app.post("/api/s/:slug/proposals", proposalBodyLimit, async (c) => {
   const survey = await getSurveyBySlug(c.req.param("slug"));
   if (!survey) return c.json({ error: "Not found" }, 404);
-  if (!survey.acceptingResponses) return c.json({ error: "This survey is closed." }, 403);
+  if (!survey.acceptingResponses) {
+    return c.json({ error: "This survey is closed." }, 403);
+  }
   const body = await questionBody(c.req.raw);
   await createProposal(survey.id, getOrSetSid(c), body.question);
   return c.json({ ok: true }, 201);
 });
 
-app.put("/api/s/:slug/proposals/:proposalId/vote", proposalBodyLimit, async (c) => {
-  const survey = await getSurveyBySlug(c.req.param("slug"));
-  if (!survey) return c.json({ error: "Not found" }, 404);
-  if (!survey.acceptingResponses) return c.json({ error: "This survey is closed." }, 403);
-  const body = await questionBody(c.req.raw);
-  if (typeof body.voted !== "boolean") return c.json({ error: "voted must be a boolean." }, 400);
-  await setProposalVote(survey.id, c.req.param("proposalId"), getOrSetSid(c), body.voted);
-  return c.json({ ok: true });
-});
+app.put(
+  "/api/s/:slug/proposals/:proposalId/vote",
+  proposalBodyLimit,
+  async (c) => {
+    const survey = await getSurveyBySlug(c.req.param("slug"));
+    if (!survey) return c.json({ error: "Not found" }, 404);
+    if (!survey.acceptingResponses) {
+      return c.json({
+        error: "This survey is closed.",
+      }, 403);
+    }
+    const body = await questionBody(c.req.raw);
+    if (typeof body.voted !== "boolean") {
+      return c.json({
+        error: "voted must be a boolean.",
+      }, 400);
+    }
+    await setProposalVote(
+      survey.id,
+      c.req.param("proposalId"),
+      getOrSetSid(c),
+      body.voted,
+    );
+    return c.json({ ok: true });
+  },
+);
 
 app.get("/api/s/:slug/results", async (c) => {
   const survey = await getSurveyBySlug(c.req.param("slug"));
   if (!survey) return c.json({ error: "Not found" }, 404);
-  if (!survey.resultsVisible) return c.json({ error: "Results are not visible yet." }, 403);
+  if (!survey.resultsVisible) {
+    return c.json({ error: "Results are not visible yet." }, 403);
+  }
   const visibleSurvey = publicSurvey(survey);
-  const requestedGroup = visibleSurvey.audienceFacets ? c.req.query("groupBy") || null : null;
+  const requestedGroup = visibleSurvey.audienceFacets
+    ? c.req.query("groupBy") || null
+    : null;
   const groupBy = requestedGroup &&
-      visibleSurvey.questions.some((question) => question.id === requestedGroup && question.isDemographic)
+      visibleSurvey.questions.some((question) =>
+        question.id === requestedGroup && question.isDemographic
+      )
     ? requestedGroup
     : null;
   const responses = await getAllResponses(survey.id);
@@ -153,8 +205,16 @@ app.get("/api/s/:slug/results", async (c) => {
 app.get("/api/s/:slug/qr.svg", async (c) => {
   const url = new URL(c.req.url);
   const target = `${url.origin}/s/${c.req.param("slug")}`;
-  const svg = await QRCode.toString(target, { type: "svg", margin: 1, width: 512, errorCorrectionLevel: "M" });
-  return c.body(svg, 200, { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" });
+  const svg = await QRCode.toString(target, {
+    type: "svg",
+    margin: 1,
+    width: 512,
+    errorCorrectionLevel: "M",
+  });
+  return c.body(svg, 200, {
+    "Content-Type": "image/svg+xml",
+    "Cache-Control": "public, max-age=3600",
+  });
 });
 
 // ---- Admin API (gated by secret key) ----
@@ -185,22 +245,37 @@ admin.patch("/questions/:questionId/release", async (c) => {
   if (typeof body.released !== "boolean") {
     throw new RequestError("released must be a boolean.", 400);
   }
-  const fresh = await setQuestionReleased(survey.id, c.req.param("questionId"), body.released);
+  const fresh = await setQuestionReleased(
+    survey.id,
+    c.req.param("questionId"),
+    body.released,
+  );
   return c.json({ survey: fresh });
 });
 
 admin.get("/proposals", async (c) => {
   const survey = c.get("survey" as never) as Survey;
-  return c.json({ proposals: await listProposals(survey.id), acceptingResponses: survey.acceptingResponses });
+  return c.json({
+    proposals: await listProposals(survey.id),
+    acceptingResponses: survey.acceptingResponses,
+  });
 });
 
 admin.post("/proposals/:proposalId/approve", proposalBodyLimit, async (c) => {
   const survey = c.get("survey" as never) as Survey;
   const body = await questionBody(c.req.raw);
-  const approvedQuestion = await approveProposal(survey.id, c.req.param("proposalId"), body.question);
+  const approvedQuestion = await approveProposal(
+    survey.id,
+    c.req.param("proposalId"),
+    body.question,
+  );
   const fresh = await getSurveyBySlug(survey.slug);
-  const publishedQuestion = fresh?.questions.find((question) => question.id === approvedQuestion.id);
-  if (!fresh || !publishedQuestion) throw new Error("Approved question was not added to the survey.");
+  const publishedQuestion = fresh?.questions.find((question) =>
+    question.id === approvedQuestion.id
+  );
+  if (!fresh || !publishedQuestion) {
+    throw new Error("Approved question was not added to the survey.");
+  }
   return c.json({ survey: fresh, approvedQuestion: publishedQuestion });
 });
 
@@ -209,7 +284,9 @@ admin.get("/results", async (c) => {
   const groupBy = c.req.query("groupBy") || null;
   const responses = await getAllResponses(survey.id);
   const all = c.req.query("includeHidden") === "1";
-  const visible = all ? survey.questions : survey.questions.filter((q: any) => !q.hidden);
+  const visible = all
+    ? survey.questions
+    : survey.questions.filter((q: any) => !q.hidden);
   return c.json({
     survey,
     totalResponses: responses.length,
@@ -223,18 +300,28 @@ admin.get("/export.csv", async (c) => {
   const responses = await getAllResponses(survey.id);
   const esc = (s: unknown) => `"${String(s ?? "").replace(/"/g, '""')}"`;
   const header = survey.questions.map((q: any) => esc(q.prompt)).join(",");
-  const optLabel = (q: any, id: string) => q.options.find((o: any) => o.id === id)?.label ?? id;
+  const optLabel = (q: any, id: string) =>
+    q.options.find((o: any) => o.id === id)?.label ?? id;
   const rows = responses.map((r) =>
     survey.questions.map((q: any) => {
       const v = r[q.id];
-      if (Array.isArray(v)) return esc(v.map((x) => optLabel(q, x)).join(" > "));
+      if (Array.isArray(v)) {
+        return esc(v.map((x) => optLabel(q, x)).join(" > "));
+      }
+      if (
+        q.type === "matrix_2x2" && v && typeof v === "object" &&
+        Number.isInteger(v.row) && Number.isInteger(v.column)
+      ) {
+        return esc(`column ${v.column + 1}, row ${v.row + 1} from top`);
+      }
       if (typeof v === "string" && q.options.length) return esc(optLabel(q, v));
       return esc(v);
     }).join(",")
   );
   return c.body([header, ...rows].join("\n"), 200, {
     "Content-Type": "text/csv",
-    "Content-Disposition": `attachment; filename="${survey.slug}-responses.csv"`,
+    "Content-Disposition":
+      `attachment; filename="${survey.slug}-responses.csv"`,
   });
 });
 
@@ -253,8 +340,12 @@ admin.delete("/", async (c) => {
 app.route("/api/admin/:key", admin);
 
 app.onError((err, c) => {
-  if (err instanceof RequestError) return c.json({ error: err.message }, err.status);
-  if (err instanceof QuestionValidationError) return c.json({ error: err.message }, 400);
+  if (err instanceof RequestError) {
+    return c.json({ error: err.message }, err.status);
+  }
+  if (err instanceof QuestionValidationError) {
+    return c.json({ error: err.message }, 400);
+  }
   if (err instanceof HTTPException) return err.getResponse();
   throw err;
 });

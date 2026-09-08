@@ -5,7 +5,29 @@ export type QuestionType =
   | "free_text"
   | "ranked_choice"
   | "word_cloud"
-  | "emoji_reaction";
+  | "emoji_reaction"
+  | "matrix_2x2";
+
+export type MatrixSize = 2 | 4 | 6;
+
+export interface MatrixAxisLabels {
+  left: string;
+  right: string;
+  bottom: string;
+  top: string;
+}
+
+export interface MatrixReference {
+  id: string;
+  row: number;
+  column: number;
+  label: string;
+}
+
+export interface MatrixAnswer {
+  row: number;
+  column: number;
+}
 
 export interface Option {
   id: string;
@@ -20,6 +42,9 @@ export interface Question {
   options: Option[]; // for choice/ranked/emoji types
   scaleMin?: number; // for scale
   scaleMax?: number;
+  matrixSize?: MatrixSize;
+  matrixAxisLabels?: MatrixAxisLabels;
+  matrixReferences?: MatrixReference[];
   isDemographic: boolean;
   required: boolean;
   released: boolean; // available to respondents and eligible for public results
@@ -38,7 +63,17 @@ export interface Survey {
   questions: Question[];
 }
 
-export type QuestionDraft = Pick<Question, "type" | "prompt" | "options" | "scaleMin" | "scaleMax">;
+export type QuestionDraft = Pick<
+  Question,
+  | "type"
+  | "prompt"
+  | "options"
+  | "scaleMin"
+  | "scaleMax"
+  | "matrixSize"
+  | "matrixAxisLabels"
+  | "matrixReferences"
+>;
 
 export interface QuestionProposal {
   id: string;
@@ -55,8 +90,9 @@ export interface ProposalsPayload {
 }
 
 /** Answer values: single -> optionId; multi -> optionId[]; scale -> number;
- *  free_text/word_cloud -> string; ranked_choice -> optionId[] (ordered); emoji -> optionId */
-export type AnswerValue = string | number | string[];
+ * free_text/word_cloud -> string; ranked_choice -> optionId[] (ordered);
+ * emoji -> optionId; matrix -> zero-based row/column. */
+export type AnswerValue = string | number | string[] | MatrixAnswer;
 
 export type Answers = Record<string, AnswerValue>;
 
@@ -83,6 +119,8 @@ export interface QuestionAggregate {
   irv?: IRVRound[];
   borda?: Record<string, number>;
   firstChoice?: Record<string, number>;
+  /** For matrix questions: counts keyed by "row,column". */
+  matrixCounts?: Record<string, number>;
 }
 
 export interface FacetGroup {
@@ -107,10 +145,12 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   ranked_choice: "Ranked choice",
   word_cloud: "Word cloud (one word/phrase)",
   emoji_reaction: "Emoji reaction",
+  matrix_2x2: "2×2 matrix",
 };
 
 export const DEFAULT_EMOJIS = ["🔥", "😍", "🤔", "😴", "😂", "🤯"];
 
 export function hasOptions(t: QuestionType) {
-  return t === "single_choice" || t === "multi_choice" || t === "ranked_choice" || t === "emoji_reaction";
+  return t === "single_choice" || t === "multi_choice" ||
+    t === "ranked_choice" || t === "emoji_reaction";
 }

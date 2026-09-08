@@ -26,6 +26,24 @@ export function ProposalCard(
           Scale: {proposal.draft.scaleMin} to {proposal.draft.scaleMax}
         </p>
       )}
+      {proposal.draft.type === "matrix_2x2" && (
+        <div className="mt-2 text-sm text-gray-600">
+          <p>
+            {proposal.draft.matrixSize}×{proposal.draft.matrixSize} matrix ·
+            {" "}
+            {proposal.draft.matrixReferences?.length ?? 0} reference item
+            {(proposal.draft.matrixReferences?.length ?? 0) === 1 ? "" : "s"}
+          </p>
+          {proposal.draft.matrixAxisLabels && (
+            <p className="mt-1 text-xs">
+              {proposal.draft.matrixAxisLabels.left} ↔{" "}
+              {proposal.draft.matrixAxisLabels.right} ·{" "}
+              {proposal.draft.matrixAxisLabels.bottom} ↕{" "}
+              {proposal.draft.matrixAxisLabels.top}
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-3 mt-3">
         <span className="text-sm text-gray-600">
           {proposal.voteCount} upvote{proposal.voteCount === 1 ? "" : "s"}
