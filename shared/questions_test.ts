@@ -187,7 +187,7 @@ Deno.test("matrix questions normalize configuration and replace untrusted refere
     type: "matrix_2x2",
     prompt: "Where should this initiative go?",
     options: [{ id: "ignored", label: "Ignored" }],
-    matrixSize: 6,
+    matrixSize: 2,
     matrixAxisLabels: {
       left: " Not urgent ",
       right: "Urgent",
@@ -195,13 +195,13 @@ Deno.test("matrix questions normalize configuration and replace untrusted refere
       top: " Important ",
     },
     matrixReferences: [
-      { id: "untrusted-a", row: 0, column: 5, label: " Do now " },
-      { id: "untrusted-b", row: 5, column: 0, label: "Defer" },
+      { id: "untrusted-a", row: 0, column: 1, label: " Do now " },
+      { id: "untrusted-b", row: 1, column: 0, label: "Defer" },
     ],
   });
 
   deepStrictEqual(draft.options, []);
-  deepStrictEqual(draft.matrixSize, 6);
+  deepStrictEqual(draft.matrixSize, 2);
   deepStrictEqual(draft.matrixAxisLabels, {
     left: "Not urgent",
     right: "Urgent",
@@ -209,16 +209,42 @@ Deno.test("matrix questions normalize configuration and replace untrusted refere
     top: "Important",
   });
   deepStrictEqual(
-    draft.matrixReferences?.map(({ row, column, label, x, y }) => ({
+    draft.matrixReferences?.map(({
       row,
       column,
       label,
-      x,
-      y,
+      symbolX,
+      symbolY,
+      labelX,
+      labelY,
+    }) => ({
+      row,
+      column,
+      label,
+      symbolX,
+      symbolY,
+      labelX,
+      labelY,
     })),
     [
-      { row: 0, column: 5, label: "Do now", x: 0.24, y: 0.2 },
-      { row: 5, column: 0, label: "Defer", x: 0.24, y: 0.2 },
+      {
+        row: 0,
+        column: 1,
+        label: "Do now",
+        symbolX: 0.24,
+        symbolY: 0.2,
+        labelX: 0.44,
+        labelY: 0.2,
+      },
+      {
+        row: 1,
+        column: 0,
+        label: "Defer",
+        symbolX: 0.24,
+        symbolY: 0.2,
+        labelX: 0.44,
+        labelY: 0.2,
+      },
     ],
   );
   notEqual(draft.matrixReferences?.[0].id, "untrusted-a");
@@ -230,7 +256,7 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
     type: "matrix_2x2",
     prompt: "Place it",
     options: [],
-    matrixSize: 4,
+    matrixSize: 2,
     matrixAxisLabels: {
       left: "Low",
       right: "High",
@@ -242,6 +268,7 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
   for (
     const patch of [
       { matrixSize: 3 },
+      { matrixSize: 4 },
       {
         matrixAxisLabels: {
           left: "",
@@ -251,7 +278,7 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
         },
       },
       { matrixReferences: [{ row: -1, column: 0, label: "Outside" }] },
-      { matrixReferences: [{ row: 4, column: 0, label: "Outside" }] },
+      { matrixReferences: [{ row: 2, column: 0, label: "Outside" }] },
       { matrixReferences: [{ row: 0.5, column: 0, label: "Fractional" }] },
       { matrixReferences: [{ row: 0, column: 0, label: " " }] },
       {
@@ -260,6 +287,22 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
           column: 0,
           label: "Partial position",
           x: 0.5,
+        }],
+      },
+      {
+        matrixReferences: [{
+          row: 0,
+          column: 0,
+          label: "Partial symbol position",
+          symbolX: 0.5,
+        }],
+      },
+      {
+        matrixReferences: [{
+          row: 0,
+          column: 0,
+          label: "Partial label position",
+          labelY: 0.5,
         }],
       },
       {
@@ -299,7 +342,6 @@ Deno.test("matrix approval disables demographics and stored matrices receive saf
 
   const stored = normalizeStoredQuestions([{
     ...newQuestion("matrix_2x2"),
-    matrixSize: 3,
     matrixAxisLabels: undefined,
     matrixReferences: [
       { id: "inside", row: 1, column: 1, label: "Inside" },
@@ -317,9 +359,27 @@ Deno.test("matrix approval disables demographics and stored matrices receive saf
     "inside",
   ]);
   deepStrictEqual(
-    stored.matrixReferences?.map(({ x, y }) => ({ x, y })),
-    [{ x: 0.24, y: 0.2 }],
+    stored.matrixReferences?.map(({
+      symbolX,
+      symbolY,
+      labelX,
+      labelY,
+    }) => ({ symbolX, symbolY, labelX, labelY })),
+    [{ symbolX: 0.24, symbolY: 0.2, labelX: 0.44, labelY: 0.2 }],
   );
+});
+
+Deno.test("stored 4x4 and 6x6 matrices are rejected", () => {
+  for (const matrixSize of [4, 6]) {
+    throws(
+      () =>
+        normalizeStoredQuestions([{
+          ...newQuestion("matrix_2x2"),
+          matrixSize,
+        }]),
+      QuestionValidationError,
+    );
+  }
 });
 
 Deno.test("matrix reference positions are normalized, preserved, and staggered per cell", () => {
@@ -358,11 +418,35 @@ Deno.test("matrix reference positions are normalized, preserved, and staggered p
   }])[0].matrixReferences;
 
   deepStrictEqual(
-    stored?.map(({ id, x, y }) => ({ id, x, y })),
+    stored?.map(({ id, symbolX, symbolY, labelX, labelY }) => ({
+      id,
+      symbolX,
+      symbolY,
+      labelX,
+      labelY,
+    })),
     [
-      { id: "positioned", x: 0.4, y: 0.7 },
-      { id: "legacy-same-cell", x: 0.76, y: 0.2 },
-      { id: "invalid-stored", x: 0.24, y: 0.2 },
+      {
+        id: "positioned",
+        symbolX: 0.4,
+        symbolY: 0.7,
+        labelX: 0.6,
+        labelY: 0.7,
+      },
+      {
+        id: "legacy-same-cell",
+        symbolX: 0.76,
+        symbolY: 0.2,
+        labelX: 0.56,
+        labelY: 0.2,
+      },
+      {
+        id: "invalid-stored",
+        symbolX: 0.24,
+        symbolY: 0.2,
+        labelX: 0.44,
+        labelY: 0.2,
+      },
     ],
   );
 
@@ -386,8 +470,13 @@ Deno.test("matrix reference positions are normalized, preserved, and staggered p
     }],
   });
   deepStrictEqual(
-    draft.matrixReferences?.map(({ x, y }) => ({ x, y })),
-    [{ x: 0.31, y: 0.84 }],
+    draft.matrixReferences?.map(({ symbolX, symbolY, labelX, labelY }) => ({
+      symbolX,
+      symbolY,
+      labelX,
+      labelY,
+    })),
+    [{ symbolX: 0.31, symbolY: 0.84, labelX: 0.51, labelY: 0.84 }],
   );
 });
 
@@ -396,7 +485,7 @@ Deno.test("matrix helpers, sanitization, and aggregation enforce cell bounds", (
     ...newQuestion("matrix_2x2"),
     id: "matrix",
     prompt: "Place it",
-    matrixSize: 4 as const,
+    matrixSize: 2 as const,
   };
   const survey: Survey = {
     id: "survey",
@@ -410,35 +499,35 @@ Deno.test("matrix helpers, sanitization, and aggregation enforce cell bounds", (
     questions: [q],
   };
 
-  deepStrictEqual(isMatrixAnswer({ row: 0, column: 3 }, 4), true);
-  deepStrictEqual(isMatrixAnswer({ row: 4, column: 0 }, 4), false);
+  deepStrictEqual(isMatrixAnswer({ row: 0, column: 1 }, 2), true);
+  deepStrictEqual(isMatrixAnswer({ row: 2, column: 0 }, 2), false);
   deepStrictEqual(
     referencesWithinSize([
       { id: "a", row: 1, column: 1, label: "Inside" },
-      { id: "b", row: 4, column: 0, label: "Outside" },
-    ], 4).map((reference) => reference.id),
+      { id: "b", row: 2, column: 0, label: "Outside" },
+    ], 2).map((reference) => reference.id),
     ["a"],
   );
   deepStrictEqual(
-    sanitizeAnswers(survey, { matrix: { row: 3, column: 2, extra: true } }),
+    sanitizeAnswers(survey, { matrix: { row: 1, column: 0, extra: true } }),
     {
-      matrix: { row: 3, column: 2 },
+      matrix: { row: 1, column: 0 },
     },
   );
   deepStrictEqual(
-    sanitizeAnswers(survey, { matrix: { row: 4, column: 2 } }),
+    sanitizeAnswers(survey, { matrix: { row: 2, column: 0 } }),
     {},
   );
-  deepStrictEqual(sanitizeAnswers(survey, { matrix: [3, 2] }), {});
+  deepStrictEqual(sanitizeAnswers(survey, { matrix: [1, 0] }), {});
 
   const aggregate = aggregateQuestion(q, [
     { matrix: { row: 0, column: 0 } },
     { matrix: { row: 0, column: 0 } },
-    { matrix: { row: 3, column: 2 } },
+    { matrix: { row: 1, column: 0 } },
     { matrix: { row: 9, column: 9 } },
   ]);
   deepStrictEqual(aggregate.responseCount, 3);
   deepStrictEqual(aggregate.matrixCounts?.[matrixCellKey(0, 0)], 2);
-  deepStrictEqual(aggregate.matrixCounts?.[matrixCellKey(3, 2)], 1);
-  deepStrictEqual(Object.keys(aggregate.matrixCounts ?? {}).length, 16);
+  deepStrictEqual(aggregate.matrixCounts?.[matrixCellKey(1, 0)], 1);
+  deepStrictEqual(Object.keys(aggregate.matrixCounts ?? {}).length, 4);
 });

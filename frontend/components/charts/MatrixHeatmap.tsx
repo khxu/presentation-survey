@@ -96,11 +96,7 @@ function GroupHeatmap(
             >
               <div className="flex h-full min-h-0 flex-col text-center">
                 <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
-                  <span
-                    className={`font-black leading-none ${
-                      size === 6 ? "text-sm sm:text-lg" : "text-2xl sm:text-3xl"
-                    }`}
-                  >
+                  <span className="text-2xl font-black leading-none sm:text-3xl">
                     {count}
                   </span>
                   <span className="mt-0.5 text-[9px] font-semibold sm:text-xs">

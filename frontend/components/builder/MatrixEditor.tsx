@@ -1,17 +1,16 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
 import { useState } from "https://esm.sh/react@18.2.0";
-import type { MatrixSize, Question } from "../../../shared/types.ts";
+import type { Question } from "../../../shared/types.ts";
 import {
-  MATRIX_SIZES,
   matrixCellKey,
-  matrixReferenceDefaultPosition,
+  matrixReferenceDefaultPositions,
   QUESTION_LIMITS,
-  referencesWithinSize,
 } from "../../../shared/questions.ts";
 import { uid } from "../../lib/api.ts";
 import {
   MatrixCellAnnotations,
   MatrixReferenceLegend,
+  type MatrixReferencePositionTarget,
   matrixReferenceText,
 } from "../MatrixCellReferences.tsx";
 
@@ -37,18 +36,22 @@ export function MatrixEditor({ q, onChange }: Props) {
 
   const set = (patch: Partial<Question>) => onChange({ ...q, ...patch });
 
-  function changeSize(nextSize: MatrixSize) {
-    const nextReferences = referencesWithinSize(references, nextSize);
-    const row = Math.min(selectedRow, nextSize - 1);
-    const column = Math.min(selectedColumn, nextSize - 1);
-    setSelectedKey(matrixCellKey(row, column));
-    set({ matrixSize: nextSize, matrixReferences: nextReferences });
-  }
-
-  function changeReferencePosition(id: string, x: number, y: number) {
+  function changeReferencePosition(
+    id: string,
+    target: MatrixReferencePositionTarget,
+    x: number,
+    y: number,
+  ) {
     set({
       matrixReferences: references.map((reference) =>
-        reference.id === id ? { ...reference, x, y } : reference
+        reference.id === id
+          ? {
+            ...reference,
+            ...(target === "symbol"
+              ? { symbolX: x, symbolY: y }
+              : { labelX: x, labelY: y }),
+          }
+          : reference
       ),
     });
   }
@@ -56,26 +59,8 @@ export function MatrixEditor({ q, onChange }: Props) {
   return (
     <div className="space-y-4 rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <label className="font-medium">
-          Grid
-          <select
-            value={size}
-            onChange={(event: any) =>
-              changeSize(Number(event.target.value) as MatrixSize)}
-            className="ml-2 rounded-lg border bg-white px-2 py-1.5"
-          >
-            {MATRIX_SIZES.map((matrixSize) => (
-              <option key={matrixSize} value={matrixSize}>
-                {matrixSize}×{matrixSize}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="text-xs text-gray-500">
-          {size === 6
-            ? "Four 3×3 quadrants · 36 selectable cells"
-            : `${size * size} selectable cells`}
-        </span>
+        <span className="font-medium">2×2 grid</span>
+        <span className="text-xs text-gray-500">4 selectable cells</span>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
@@ -101,8 +86,8 @@ export function MatrixEditor({ q, onChange }: Props) {
       <div>
         <p className="mb-2 text-xs text-gray-500">
           Select a cell, then add comparison items that respondents should see
-          there. Drag a labeled symbol, or focus it and use the arrow keys, to
-          reposition it within the cell.
+          there. Drag the symbol and its label separately, or focus either one
+          and use the arrow keys, to position them within the cell.
         </p>
         <div className="mx-auto max-w-md">
           <div className="mb-1 text-center text-xs font-semibold text-gray-600">
@@ -189,7 +174,7 @@ export function MatrixEditor({ q, onChange }: Props) {
             type="button"
             disabled={references.length >= QUESTION_LIMITS.matrixReferences}
             onClick={() => {
-              const position = matrixReferenceDefaultPosition(
+              const position = matrixReferenceDefaultPositions(
                 selectedReferences.length,
               );
               set({

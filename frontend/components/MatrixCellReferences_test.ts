@@ -1,7 +1,9 @@
 import { deepStrictEqual, equal } from "node:assert/strict";
 import {
+  clampMatrixLabelPosition,
   matrixAnnotationSizeClasses,
   matrixCellMarkerLimit,
+  matrixReferenceConnectorPoints,
   matrixReferenceMarkerStyle,
   matrixReferenceMinimapCells,
   matrixReferencePositionStyle,
@@ -21,11 +23,8 @@ Deno.test("matrix reference text includes every nonempty label", () => {
   );
 });
 
-Deno.test("matrix cell marker limits decrease for denser grids", () => {
-  deepStrictEqual(
-    ([2, 4, 6] as const).map(matrixCellMarkerLimit),
-    [8, 4, 3],
-  );
+Deno.test("matrix cell marker limits fit the fixed 2x2 grid", () => {
+  equal(matrixCellMarkerLimit(2), 8);
 });
 
 Deno.test("matrix reference marker styles are deterministic and unique", () => {
@@ -41,13 +40,13 @@ Deno.test("matrix reference marker styles are deterministic and unique", () => {
 });
 
 Deno.test("matrix reference minimap highlights exactly the selected cell", () => {
-  const cells = matrixReferenceMinimapCells({ row: 1, column: 2 }, 4);
-  equal(cells.length, 16);
+  const cells = matrixReferenceMinimapCells({ row: 1, column: 0 }, 2);
+  equal(cells.length, 4);
   equal(cells.filter(Boolean).length, 1);
-  equal(cells[6], true);
+  equal(cells[2], true);
   equal(
-    matrixReferencePositionText({ row: 1, column: 2 }, 4),
-    "Column 3 of 4, row 2 of 4 from top",
+    matrixReferencePositionText({ row: 1, column: 0 }, 2),
+    "Column 1 of 2, row 2 of 2 from top",
   );
 });
 
@@ -64,10 +63,38 @@ Deno.test("matrix reference position styles use bounded percentages", () => {
   });
 });
 
-Deno.test("matrix annotations compact their labels and markers for denser grids", () => {
-  const classes = ([2, 4, 6] as const).map(matrixAnnotationSizeClasses);
-  equal(new Set(classes.map((item) => item.annotation)).size, 3);
-  equal(new Set(classes.map((item) => item.marker)).size, 3);
-  equal(classes[0].annotation.includes("text-[10px]"), true);
-  equal(classes[2].annotation.includes("text-[5px]"), true);
+Deno.test("matrix annotations use the fixed 2x2 sizing", () => {
+  const classes = matrixAnnotationSizeClasses(2);
+  equal(classes.annotation.includes("text-[10px]"), true);
+  equal(classes.marker, "h-5 w-5");
+});
+
+Deno.test("matrix label positions account for rendered bounds", () => {
+  deepStrictEqual(
+    clampMatrixLabelPosition(0.1, 0.9, {
+      cellWidth: 200,
+      cellHeight: 100,
+      labelWidth: 120,
+      labelHeight: 20,
+    }),
+    { x: 0.32, y: 0.86 },
+  );
+  deepStrictEqual(
+    clampMatrixLabelPosition(0.25, 0.75, {
+      cellWidth: 0,
+      cellHeight: 0,
+      labelWidth: 0,
+      labelHeight: 0,
+    }),
+    { x: 0.25, y: 0.75 },
+  );
+});
+
+Deno.test("matrix connectors use bounded percentage coordinates", () => {
+  deepStrictEqual(matrixReferenceConnectorPoints(0.2, 0.3, 0.8, 0.7), {
+    x1: "20%",
+    y1: "30%",
+    x2: "80%",
+    y2: "70%",
+  });
 });

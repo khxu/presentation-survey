@@ -8,7 +8,7 @@ export type QuestionType =
   | "emoji_reaction"
   | "matrix_2x2";
 
-export type MatrixSize = 2 | 4 | 6;
+export type MatrixSize = 2;
 
 export interface MatrixAxisLabels {
   left: string;
@@ -22,9 +22,11 @@ export interface MatrixReference {
   row: number;
   column: number;
   label: string;
-  /** Normalized annotation center within the reference cell. */
-  x?: number;
-  y?: number;
+  /** Normalized symbol and label centers within the reference cell. */
+  symbolX?: number;
+  symbolY?: number;
+  labelX?: number;
+  labelY?: number;
 }
 
 export interface MatrixAnswer {

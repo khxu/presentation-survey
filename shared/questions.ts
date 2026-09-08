@@ -20,7 +20,6 @@ export const QUESTION_LIMITS = {
   matrixReferences: 100,
 };
 
-export const MATRIX_SIZES: MatrixSize[] = [2, 4, 6];
 export const MATRIX_REFERENCE_POSITION_MIN = 0.08;
 export const MATRIX_REFERENCE_POSITION_MAX = 0.92;
 
@@ -92,6 +91,15 @@ export function normalizeStoredQuestions(raw: unknown): Question[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((question, position) => {
     const stored = question as Question;
+    if (
+      stored.type === "matrix_2x2" &&
+      stored.matrixSize !== undefined &&
+      stored.matrixSize !== 2
+    ) {
+      throw new QuestionValidationError(
+        "Stored 4x4 and 6x6 matrices are no longer supported.",
+      );
+    }
     return {
       ...stored,
       position,
@@ -100,11 +108,11 @@ export function normalizeStoredQuestions(raw: unknown): Question[] {
         : true,
       ...(stored.type === "matrix_2x2"
         ? {
-          matrixSize: isMatrixSize(stored.matrixSize) ? stored.matrixSize : 2,
+          matrixSize: 2 as MatrixSize,
           matrixAxisLabels: normalizeStoredAxisLabels(stored.matrixAxisLabels),
           matrixReferences: normalizeStoredReferences(
             stored.matrixReferences,
-            isMatrixSize(stored.matrixSize) ? stored.matrixSize : 2,
+            2,
           ),
           isDemographic: false,
         }
@@ -130,7 +138,7 @@ function text(raw: unknown, max: number, label: string): string {
 }
 
 export function isMatrixSize(raw: unknown): raw is MatrixSize {
-  return typeof raw === "number" && MATRIX_SIZES.includes(raw as MatrixSize);
+  return raw === 2;
 }
 
 export function matrixCellKey(row: number, column: number): string {
@@ -160,6 +168,24 @@ export function matrixReferenceDefaultPosition(
   return {
     x: clampMatrixReferencePosition(base.x + offset),
     y: clampMatrixReferencePosition(base.y - offset),
+  };
+}
+
+export function matrixReferenceDefaultPositions(
+  indexInCell: number,
+): {
+  symbolX: number;
+  symbolY: number;
+  labelX: number;
+  labelY: number;
+} {
+  const symbol = matrixReferenceDefaultPosition(indexInCell);
+  const labelOffset = symbol.x <= 0.5 ? 0.2 : -0.2;
+  return {
+    symbolX: symbol.x,
+    symbolY: symbol.y,
+    labelX: clampMatrixReferencePosition(symbol.x + labelOffset),
+    labelY: symbol.y,
   };
 }
 
@@ -223,15 +249,31 @@ function normalizeStoredReferences(
         return [];
       }
       const stored = reference as MatrixReference;
+      const input = reference as Record<string, unknown>;
       const key = matrixCellKey(stored.row, stored.column);
       const indexInCell = cellCounts.get(key) ?? 0;
       cellCounts.set(key, indexInCell + 1);
-      const fallback = matrixReferenceDefaultPosition(indexInCell);
+      const fallback = matrixReferenceDefaultPositions(indexInCell);
+      const legacyPosition = coordinatePair(input, "x", "y") ?? undefined;
+      const symbolPosition = coordinatePair(input, "symbolX", "symbolY") ??
+        undefined;
+      const labelPosition = coordinatePair(input, "labelX", "labelY") ??
+        undefined;
       return [{
-        ...stored,
+        id: stored.id,
+        row: stored.row,
+        column: stored.column,
         label: stored.label.trim(),
-        x: validStoredReferencePosition(stored.x) ? stored.x : fallback.x,
-        y: validStoredReferencePosition(stored.y) ? stored.y : fallback.y,
+        symbolX: symbolPosition?.x ?? legacyPosition?.x ?? fallback.symbolX,
+        symbolY: symbolPosition?.y ?? legacyPosition?.y ?? fallback.symbolY,
+        labelX: labelPosition?.x ??
+          (legacyPosition
+            ? clampMatrixReferencePosition(
+              legacyPosition.x +
+                (legacyPosition.x <= 0.5 ? 0.2 : -0.2),
+            )
+            : fallback.labelX),
+        labelY: labelPosition?.y ?? legacyPosition?.y ?? fallback.labelY,
       }];
     }).slice(0, QUESTION_LIMITS.matrixReferences),
     size,
@@ -285,19 +327,30 @@ function matrixReferences(raw: unknown, size: MatrixSize): MatrixReference[] {
     const key = matrixCellKey(row, column);
     const indexInCell = cellCounts.get(key) ?? 0;
     cellCounts.set(key, indexInCell + 1);
-    const fallback = matrixReferenceDefaultPosition(indexInCell);
-    const hasX = input.x !== undefined;
-    const hasY = input.y !== undefined;
+    const fallback = matrixReferenceDefaultPositions(indexInCell);
+    const legacyPosition = coordinatePair(input, "x", "y");
+    const symbolPosition = coordinatePair(input, "symbolX", "symbolY");
+    const labelPosition = coordinatePair(input, "labelX", "labelY");
     if (
-      hasX !== hasY ||
-      (hasX &&
-        (!validStoredReferencePosition(input.x) ||
-          !validStoredReferencePosition(input.y)))
+      legacyPosition === null || symbolPosition === null ||
+      labelPosition === null
     ) {
       throw new QuestionValidationError(
         `Matrix reference positions must be between ${MATRIX_REFERENCE_POSITION_MIN} and ${MATRIX_REFERENCE_POSITION_MAX}.`,
       );
     }
+    const symbol = symbolPosition ?? legacyPosition ?? {
+      x: fallback.symbolX,
+      y: fallback.symbolY,
+    };
+    const label = labelPosition ?? (legacyPosition
+      ? {
+        x: clampMatrixReferencePosition(
+          legacyPosition.x + (legacyPosition.x <= 0.5 ? 0.2 : -0.2),
+        ),
+        y: legacyPosition.y,
+      }
+      : { x: fallback.labelX, y: fallback.labelY });
     return {
       id: crypto.randomUUID(),
       row,
@@ -307,10 +360,29 @@ function matrixReferences(raw: unknown, size: MatrixSize): MatrixReference[] {
         QUESTION_LIMITS.matrixReferenceLabel,
         "Matrix reference label",
       ),
-      x: hasX ? input.x as number : fallback.x,
-      y: hasY ? input.y as number : fallback.y,
+      symbolX: symbol.x,
+      symbolY: symbol.y,
+      labelX: label.x,
+      labelY: label.y,
     };
   });
+}
+
+function coordinatePair(
+  input: Record<string, unknown>,
+  xKey: string,
+  yKey: string,
+): { x: number; y: number } | null | undefined {
+  const hasX = input[xKey] !== undefined;
+  const hasY = input[yKey] !== undefined;
+  if (!hasX && !hasY) return undefined;
+  if (
+    hasX !== hasY || !validStoredReferencePosition(input[xKey]) ||
+    !validStoredReferencePosition(input[yKey])
+  ) {
+    return null;
+  }
+  return { x: input[xKey], y: input[yKey] };
 }
 
 /** Ignore client IDs and admin flags; every approved question gets fresh identifiers. */
@@ -366,7 +438,7 @@ export function normalizeDraft(raw: unknown): QuestionDraft {
   }
   if (type === "matrix_2x2") {
     if (!isMatrixSize(input.matrixSize)) {
-      throw new QuestionValidationError("Choose a 2x2, 4x4, or 6x6 matrix.");
+      throw new QuestionValidationError("Choose a 2x2 matrix.");
     }
     draft.matrixSize = input.matrixSize;
     draft.matrixAxisLabels = matrixAxisLabels(input.matrixAxisLabels);
