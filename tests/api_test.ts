@@ -479,3 +479,71 @@ Deno.test("API: legacy saved questions remain released and can be edited", async
     await request(`/api/admin/${adminKey}`, "DELETE");
   }
 });
+
+Deno.test("API: pick-many results expose canonical exact intersections", async () => {
+  const { slug, adminKey } = await create();
+  try {
+    const question: Question = {
+      id: "pick-many",
+      position: 0,
+      type: "multi_choice",
+      prompt: "Pick tools",
+      options: [
+        { id: "a", label: "Alpha" },
+        { id: "b", label: "Beta" },
+        { id: "c", label: "Gamma" },
+      ],
+      required: false,
+      released: true,
+      hidden: false,
+      isDemographic: false,
+    };
+    deepStrictEqual(
+      (await request(`/api/admin/${adminKey}`, "PATCH", {
+        questions: [question],
+        expectedQuestions: [],
+      })).status,
+      200,
+    );
+
+    const cookies: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const response = await request(`/api/s/${slug}`);
+      cookies.push(response.headers.get("set-cookie")!.split(";")[0]);
+    }
+    const first = await request(
+      `/api/s/${slug}/respond`,
+      "POST",
+      { answers: { [question.id]: ["b", "a", "a", "invalid"] } },
+      cookies[0],
+    );
+    deepStrictEqual((await first.json()).answers[question.id], ["a", "b"]);
+    await request(
+      `/api/s/${slug}/respond`,
+      "POST",
+      { answers: { [question.id]: ["a", "b"] } },
+      cookies[1],
+    );
+    await request(
+      `/api/s/${slug}/respond`,
+      "POST",
+      { answers: { [question.id]: [] } },
+      cookies[2],
+    );
+
+    const results = await (await request(`/api/admin/${adminKey}/results`))
+      .json();
+    deepStrictEqual(results.groups[0].aggregates[0], {
+      questionId: question.id,
+      type: question.type,
+      responseCount: 3,
+      counts: { a: 2, b: 2, c: 0 },
+      intersections: [
+        { optionIds: ["a", "b"], count: 2 },
+        { optionIds: [], count: 1 },
+      ],
+    });
+  } finally {
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});

@@ -1,5 +1,5 @@
 import { DEFAULT_EMOJIS, hasOptions, QUESTION_TYPE_LABELS } from "./types.ts";
-import type { Question, QuestionDraft, QuestionType } from "./types.ts";
+import type { Option, Question, QuestionDraft, QuestionType } from "./types.ts";
 
 export const QUESTION_LIMITS = {
   prompt: 500,
@@ -9,6 +9,12 @@ export const QUESTION_LIMITS = {
 };
 
 export class QuestionValidationError extends Error {}
+
+export function canonicalizeChoiceSelection(options: Option[], raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  const selected = new Set(raw.filter((value): value is string => typeof value === "string"));
+  return options.filter((option) => selected.has(option.id)).map((option) => option.id);
+}
 
 export function newQuestion(type: QuestionType = "single_choice"): Question {
   return {

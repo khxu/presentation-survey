@@ -1,5 +1,5 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
-import { normalizeStoredQuestions } from "../shared/questions.ts";
+import { canonicalizeChoiceSelection, normalizeStoredQuestions } from "../shared/questions.ts";
 import { ensureSchema, randomId, sha256, sqlite } from "./db.ts";
 import { RequestError } from "./errors.ts";
 
@@ -198,7 +198,10 @@ export function sanitizeAnswers(survey: Survey, raw: unknown): Answers {
         if (typeof v === "string" && optIds.has(v)) out[q.id] = v;
         break;
       case "multi_choice":
-        if (Array.isArray(v)) out[q.id] = v.filter((x) => typeof x === "string" && optIds.has(x));
+        {
+          const selected = canonicalizeChoiceSelection(q.options, v);
+          if (selected) out[q.id] = selected;
+        }
         break;
       case "ranked_choice":
         if (Array.isArray(v)) {

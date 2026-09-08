@@ -70,7 +70,7 @@ function EmojiBubbles({ q, agg }: { q: Question; agg?: QuestionAggregate }) {
 /* ---------------- Scale: histogram (+ per-group overlay) & mean ---------------- */
 export function ScaleChart({ q, groups }: { q: Question; groups: FacetGroup[] }) {
   const min = q.scaleMin ?? 1, max = q.scaleMax ?? 5;
-  const data = [];
+  const data: Record<string, string | number>[] = [];
   for (let i = min; i <= max; i++) {
     const row: Record<string, string | number> = { name: String(i) };
     for (const g of groups) row[g.label] = agg(g, q.id)?.distribution?.[String(i)] ?? 0;
