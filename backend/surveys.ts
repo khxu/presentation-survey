@@ -1,7 +1,9 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
 import {
   canonicalizeChoiceSelection,
+  normalizeDraft,
   normalizeMatrixAnswer,
+  normalizeSpectrumAnswer,
   normalizeStoredQuestions,
   QUESTION_LIMITS,
 } from "../shared/questions.ts";
@@ -174,14 +176,45 @@ export async function updateSurvey(
       );
     }
     expectedPersistedQuestions = String(currentJson);
-    const qs = patch.questions.map((q, i) => ({
-      ...q,
-      position: i,
-      released: q.released === true,
-      ...(q.type === "matrix_2x2"
-        ? { matrixSubjectLabel: q.matrixSubjectLabel!.trim() }
-        : {}),
-    }));
+    const qs = patch.questions.map((q, i) => {
+      const stored = currentQuestions.find((question) => question.id === q.id);
+      if (
+        stored?.type === "paired_spectrum" &&
+        stored.spectrumPhase === "after" && q.type !== stored.type
+      ) {
+        throw new RequestError(
+          "An after-phase spectrum cannot change type.",
+          400,
+        );
+      }
+      if (q.type === "paired_spectrum") {
+        const phase = stored?.type === q.type
+          ? stored.spectrumPhase ?? "before"
+          : "before";
+        if (q.spectrumPhase !== phase) {
+          throw new RequestError(
+            "Use the phase control to open after responses.",
+            400,
+          );
+        }
+        return {
+          ...q,
+          ...normalizeDraft(q),
+          spectrumPhase: phase,
+          isDemographic: false,
+          position: i,
+          released: q.released === true,
+        };
+      }
+      return {
+        ...q,
+        position: i,
+        released: q.released === true,
+        ...(q.type === "matrix_2x2"
+          ? { matrixSubjectLabel: q.matrixSubjectLabel!.trim() }
+          : {}),
+      };
+    });
     sets.push("questions_json = ?"), args.push(JSON.stringify(qs));
   }
   if (!sets.length) return;
@@ -243,6 +276,122 @@ export async function setQuestionReleased(
     );
   }
   return rowToSurvey(result.rows[0] as Record<string, unknown>);
+}
+
+export async function openSpectrumAfter(
+  surveyId: string,
+  questionId: string,
+): Promise<Survey> {
+  await ensureSchema();
+  const result = await sqlite.execute({
+    sql: "SELECT * FROM surveys WHERE id = ?",
+    args: [surveyId],
+  });
+  if (!result.rows[0]) throw new RequestError("Survey not found.", 404);
+  const row = result.rows[0] as Record<string, unknown>;
+  const survey = rowToSurvey(row);
+  const question = survey.questions.find((q) => q.id === questionId);
+  if (!question) throw new RequestError("Question not found.", 404);
+  if (question.type !== "paired_spectrum" || !question.released) {
+    throw new RequestError("Release a before/after spectrum first.", 400);
+  }
+  if (question.spectrumPhase === "after") {
+    throw new RequestError("After responses are already open.", 409);
+  }
+  const questions = survey.questions.map((q) =>
+    q.id === questionId ? { ...q, spectrumPhase: "after" as const } : q
+  );
+  const updated = await sqlite.execute({
+    sql:
+      "UPDATE surveys SET questions_json = ? WHERE id = ? AND questions_json = ? RETURNING *",
+    args: [JSON.stringify(questions), surveyId, String(row.questions_json)],
+  });
+  if (!updated.rowsAffected) {
+    throw new RequestError(
+      "Questions changed. Reload before opening after responses.",
+      409,
+    );
+  }
+  return rowToSurvey(updated.rows[0] as Record<string, unknown>);
+}
+
+/** Compare both snapshots so a phase switch or parallel response cannot undo a baseline. */
+export async function saveResponse(
+  surveyId: string,
+  sid: string,
+  raw: unknown,
+): Promise<Answers> {
+  await ensureSchema();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const surveyResult = await sqlite.execute({
+      sql: "SELECT * FROM surveys WHERE id = ?",
+      args: [surveyId],
+    });
+    if (!surveyResult.rows[0]) throw new RequestError("Survey not found.", 404);
+    const row = surveyResult.rows[0] as Record<string, unknown>;
+    const survey = rowToSurvey(row);
+    if (!survey.acceptingResponses) {
+      throw new RequestError("This survey is closed.", 403);
+    }
+    const responseResult = await sqlite.execute({
+      sql: "SELECT answers_json FROM responses WHERE survey_id = ? AND sid = ?",
+      args: [surveyId, sid],
+    });
+    const snapshot = responseResult.rows[0]?.answers_json;
+    const existing: Answers = snapshot === undefined
+      ? {}
+      : JSON.parse(String(snapshot));
+    const visible = publicSurvey(survey);
+    const incoming = sanitizeAnswers(visible, raw);
+    const answers = mergeReleasedAnswers(existing, visible.questions, incoming);
+    for (const q of visible.questions) {
+      if (q.type !== "paired_spectrum") continue;
+      const saved = normalizeSpectrumAnswer(existing[q.id]);
+      const next = normalizeSpectrumAnswer(incoming[q.id]);
+      if (q.spectrumPhase !== "after" && next?.after !== undefined) {
+        throw new RequestError("After responses are not open yet.", 409);
+      }
+      if (
+        q.spectrumPhase === "after" && saved?.before !== undefined &&
+        next?.before !== undefined && next.before !== saved.before
+      ) {
+        throw new RequestError(
+          "Your before answer is frozen. Reload to use the saved baseline.",
+          409,
+        );
+      }
+      const merged = { ...saved, ...next };
+      if (merged.after !== undefined && merged.before === undefined) {
+        throw new RequestError(
+          "Submit a before answer before an after answer.",
+          400,
+        );
+      }
+      if (merged.before !== undefined) answers[q.id] = merged;
+    }
+    const result = await sqlite.execute({
+      sql: `INSERT INTO responses (survey_id, sid, answers_json)
+        SELECT ?, ?, ? WHERE EXISTS (
+          SELECT 1 FROM surveys WHERE id = ? AND questions_json = ? AND accepting_responses = 1
+        )
+        ON CONFLICT(survey_id, sid) DO UPDATE
+        SET answers_json = excluded.answers_json, updated_at = datetime('now')
+        WHERE responses.answers_json = ?`,
+      args: [
+        surveyId,
+        sid,
+        JSON.stringify(answers),
+        surveyId,
+        String(row.questions_json),
+        snapshot === undefined ? "" : String(snapshot),
+      ],
+    });
+    if (result.rowsAffected) return filterAnswers(answers, visible.questions)!;
+  }
+  throw new RequestError(
+    "Responses changed in another tab. Reload and retry.",
+    409,
+  );
 }
 
 export async function deleteSurvey(id: string): Promise<void> {
@@ -336,6 +485,17 @@ export function sanitizeAnswers(survey: Survey, raw: unknown): Answers {
         if (Number.isFinite(n) && n >= min && n <= max) {
           out[q.id] = Math.round(n);
         }
+        break;
+      }
+      case "paired_spectrum": {
+        const answer = normalizeSpectrumAnswer(v);
+        if (!answer) {
+          throw new RequestError(
+            "Spectrum answers must be whole numbers from 0 to 100.",
+            400,
+          );
+        }
+        out[q.id] = answer;
         break;
       }
       case "free_text":

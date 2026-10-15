@@ -141,3 +141,142 @@ Deno.test("matrix aggregation returns points and derived quadrant counts", () =>
     "1,1": 1,
   });
 });
+
+Deno.test("paired statistics retain every swing and exclude incomplete or invalid pairs", () => {
+  const q = { ...newQuestion("paired_spectrum"), id: "impact" };
+  const result = aggregateQuestion(q, [
+    { impact: { before: 0, after: 100 } },
+    { impact: { before: 50, after: 49 } },
+    { impact: { before: 20, after: 19 } },
+    { impact: { before: 0 } },
+    { impact: { before: 101, after: 100 } },
+    {},
+  ]);
+  deepStrictEqual(result.responseCount, 4);
+  deepStrictEqual(result.pairedSpectrum, {
+    beforeCount: 4,
+    afterCount: 3,
+    beforeDistribution: [2, 1, 0, 0, 1, 0, 0, 0, 0, 0],
+    afterDistribution: [0, 1, 0, 0, 1, 0, 0, 0, 0, 1],
+    pairCount: 3,
+    meanBefore: 23.33,
+    meanAfter: 56,
+    meanChange: 32.67,
+    leftCount: 2,
+    rightCount: 1,
+    unchangedCount: 0,
+    pairs: [
+      { before: 0, after: 100 },
+      { before: 20, after: 19 },
+      { before: 50, after: 49 },
+    ],
+  });
+  deepStrictEqual(
+    aggregateQuestion(q, [{ impact: { before: 0 } }]).pairedSpectrum,
+    {
+      beforeCount: 1,
+      afterCount: 0,
+      beforeDistribution: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      afterDistribution: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      pairCount: 0,
+      meanBefore: null,
+      meanAfter: null,
+      meanChange: null,
+      leftCount: 0,
+      rightCount: 0,
+      unchangedCount: 0,
+      pairs: [],
+    },
+  );
+});
+
+Deno.test("paired facet means use matched respondents, not differences of unpaired means", () => {
+  const demographic = {
+    ...multiChoice("role"),
+    type: "single_choice" as const,
+    isDemographic: true,
+  };
+  const q = { ...newQuestion("paired_spectrum"), id: "impact" };
+  const survey: Survey = {
+    id: "s",
+    slug: "s",
+    title: "Survey",
+    description: "",
+    createdAt: "",
+    resultsVisible: true,
+    acceptingResponses: true,
+    audienceFacets: true,
+    questions: [demographic, q],
+  };
+  const groups = buildResults(
+    survey,
+    [
+      { role: "a", impact: { before: 0, after: 10 } },
+      { role: "a", impact: { before: 100 } },
+      { role: "b", impact: { before: 100, after: 0 } },
+      { role: "b", impact: { before: 50, after: 50 } },
+    ],
+    "role",
+    survey.questions,
+  );
+  deepStrictEqual(
+    groups.map((g) => g.aggregates[0].pairedSpectrum?.meanChange),
+    [10, -50, null],
+  );
+  deepStrictEqual(groups[1].aggregates[0].pairedSpectrum?.unchangedCount, 1);
+  deepStrictEqual(groups[0].aggregates[0].pairedSpectrum?.beforeDistribution, [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+  ]);
+  deepStrictEqual(groups[1].aggregates[0].pairedSpectrum?.afterDistribution, [
+    1,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+  ]);
+});
+
+Deno.test("spectrum histograms include every integer and phase independently without pairs", () => {
+  const q = { ...newQuestion("paired_spectrum"), id: "impact" };
+  const allBefore = Array.from(
+    { length: 101 },
+    (_, before) => ({ impact: { before } }),
+  );
+  const result = aggregateQuestion(q, [...allBefore, {
+    impact: { after: 100 },
+  }]).pairedSpectrum!;
+  deepStrictEqual(result.beforeCount, 101);
+  deepStrictEqual(result.afterCount, 1);
+  deepStrictEqual(result.pairCount, 0);
+  deepStrictEqual(result.beforeDistribution, [
+    11,
+    10,
+    10,
+    10,
+    10,
+    10,
+    10,
+    10,
+    10,
+    10,
+  ]);
+  deepStrictEqual(result.afterDistribution, [0, 0, 0, 0, 0, 0, 0, 0, 0, 1]);
+  deepStrictEqual(result.meanChange, null);
+  const empty = aggregateQuestion(q, []).pairedSpectrum!;
+  deepStrictEqual(empty.beforeDistribution, Array(10).fill(0));
+  deepStrictEqual(empty.afterDistribution, Array(10).fill(0));
+});

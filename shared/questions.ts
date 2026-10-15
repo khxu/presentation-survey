@@ -5,6 +5,7 @@ import type {
   MatrixReference,
   MatrixSize,
   Option,
+  PairedSpectrumAnswer,
   Question,
   QuestionDraft,
   QuestionType,
@@ -15,11 +16,40 @@ export const QUESTION_LIMITS = {
   optionLabel: 120,
   options: 20,
   scaleSteps: 21,
+  spectrumLabel: 60,
   matrixSubjectLabel: 120,
   matrixAxisLabel: 60,
   matrixReferenceLabel: 120,
   matrixReferences: 100,
 };
+
+export const DEFAULT_SPECTRUM_LABELS = { left: "No", right: "Yes" };
+
+export const SPECTRUM_BINS = Array.from({ length: 10 }, (_, index) => ({
+  min: index === 0 ? 0 : index * 10 + 1,
+  max: (index + 1) * 10,
+}));
+
+export function isSpectrumValue(raw: unknown): raw is number {
+  return typeof raw === "number" && Number.isInteger(raw) && raw >= 0 &&
+    raw <= 100;
+}
+
+export function normalizeSpectrumAnswer(
+  raw: unknown,
+): PairedSpectrumAnswer | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const value = raw as Record<string, unknown>;
+  if (
+    (value.before !== undefined && !isSpectrumValue(value.before)) ||
+    (value.after !== undefined && !isSpectrumValue(value.after)) ||
+    (value.before === undefined && value.after === undefined)
+  ) return null;
+  return {
+    ...(isSpectrumValue(value.before) ? { before: value.before } : {}),
+    ...(isSpectrumValue(value.after) ? { after: value.after } : {}),
+  };
+}
 
 export const MATRIX_REFERENCE_POSITION_MIN = 0.08;
 export const MATRIX_REFERENCE_POSITION_MAX = 0.92;
@@ -73,6 +103,12 @@ export function newQuestion(type: QuestionType = "single_choice"): Question {
       }))
       : [],
     ...(type === "scale" ? { scaleMin: 1, scaleMax: 5 } : {}),
+    ...(type === "paired_spectrum"
+      ? {
+        spectrumLabels: { ...DEFAULT_SPECTRUM_LABELS },
+        spectrumPhase: "before" as const,
+      }
+      : {}),
     ...(type === "matrix_2x2"
       ? {
         matrixSize: 2 as MatrixSize,
@@ -108,6 +144,14 @@ export function normalizeStoredQuestions(raw: unknown): Question[] {
       released: typeof (question as Partial<Question>)?.released === "boolean"
         ? stored.released
         : true,
+      ...(stored.type === "paired_spectrum"
+        ? {
+          spectrumPhase: stored.spectrumPhase ?? "before",
+          spectrumLabels: stored.spectrumLabels ??
+            { ...DEFAULT_SPECTRUM_LABELS },
+          isDemographic: false,
+        }
+        : {}),
       ...(stored.type === "matrix_2x2"
         ? {
           matrixSize: 2 as MatrixSize,
@@ -488,6 +532,23 @@ export function normalizeDraft(raw: unknown): QuestionDraft {
     }
     draft.scaleMin = min;
     draft.scaleMax = max;
+  }
+  if (type === "paired_spectrum") {
+    const labels = record(input.spectrumLabels);
+    draft.spectrumLabels = {
+      left: text(labels.left, QUESTION_LIMITS.spectrumLabel, "Left endpoint"),
+      right: text(
+        labels.right,
+        QUESTION_LIMITS.spectrumLabel,
+        "Right endpoint",
+      ),
+    };
+    if (
+      draft.spectrumLabels.left.toLowerCase() ===
+        draft.spectrumLabels.right.toLowerCase()
+    ) {
+      throw new QuestionValidationError("Spectrum endpoints must be distinct.");
+    }
   }
   if (type === "matrix_2x2") {
     if (!isMatrixSize(input.matrixSize)) {

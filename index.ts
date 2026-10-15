@@ -18,12 +18,11 @@ import {
   getResponse,
   getSurveyByAdminKey,
   getSurveyBySlug,
-  mergeReleasedAnswers,
+  openSpectrumAfter,
   publicSurvey,
-  sanitizeAnswers,
+  saveResponse,
   setQuestionReleased,
   updateSurvey,
-  upsertResponse,
 } from "./backend/surveys.ts";
 import { Root } from "./frontend/root.tsx";
 import {
@@ -35,9 +34,10 @@ import {
 import { RequestError } from "./backend/errors.ts";
 import {
   normalizeMatrixAnswer,
+  normalizeSpectrumAnswer,
   QuestionValidationError,
 } from "./shared/questions.ts";
-import type { Survey } from "./shared/types.ts";
+import type { Question, Survey } from "./shared/types.ts";
 
 const app = new Hono();
 
@@ -122,14 +122,7 @@ app.post("/api/s/:slug/respond", async (c) => {
   }
   const sid = getOrSetSid(c);
   const body = await c.req.json().catch(() => ({}));
-  const visibleSurvey = publicSurvey(survey);
-  const answers = sanitizeAnswers(visibleSurvey, body.answers);
-  const existing = await getResponse(survey.id, sid);
-  await upsertResponse(
-    survey.id,
-    sid,
-    mergeReleasedAnswers(existing, visibleSurvey.questions, answers),
-  );
+  const answers = await saveResponse(survey.id, sid, body.answers);
   return c.json({ ok: true, answers });
 });
 
@@ -256,6 +249,19 @@ admin.patch("/questions/:questionId/release", async (c) => {
   return c.json({ survey: fresh });
 });
 
+admin.patch("/questions/:questionId/phase", async (c) => {
+  const survey = c.get("survey" as never) as Survey;
+  const body = await questionBody(c.req.raw);
+  if (body.phase !== "after") {
+    throw new RequestError(
+      "Only advancing to the after phase is supported.",
+      400,
+    );
+  }
+  return c.json({
+    survey: await openSpectrumAfter(survey.id, c.req.param("questionId")),
+  });
+});
 admin.get("/proposals", async (c) => {
   const survey = c.get("survey" as never) as Survey;
   return c.json({
@@ -302,12 +308,20 @@ admin.get("/export.csv", async (c) => {
   const survey = c.get("survey" as never) as any;
   const responses = await getAllResponses(survey.id);
   const esc = (s: unknown) => `"${String(s ?? "").replace(/"/g, '""')}"`;
-  const header = survey.questions.map((q: any) => esc(q.prompt)).join(",");
+  const header = survey.questions.flatMap((q: Question) =>
+    q.type === "paired_spectrum"
+      ? [esc(`${q.prompt} (before)`), esc(`${q.prompt} (after)`)]
+      : [esc(q.prompt)]
+  ).join(",");
   const optLabel = (q: any, id: string) =>
     q.options.find((o: any) => o.id === id)?.label ?? id;
   const rows = responses.map((r) =>
-    survey.questions.map((q: any) => {
+    survey.questions.flatMap((q: Question) => {
       const v = r[q.id];
+      if (q.type === "paired_spectrum") {
+        const answer = normalizeSpectrumAnswer(v);
+        return [esc(answer?.before), esc(answer?.after)];
+      }
       if (Array.isArray(v)) {
         return esc(v.map((x) => optLabel(q, x)).join(" > "));
       }

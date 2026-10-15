@@ -69,3 +69,20 @@ Deno.test("release updates preserve local edits and merge concurrent additions",
     [{ ...draft[0], released: true }, draft[1], approved],
   );
 });
+
+Deno.test("opening after merges persisted phase without publishing draft edits", () => {
+  const published: Question = {
+    ...question("impact", "Published", 0),
+    type: "paired_spectrum",
+    spectrumPhase: "before",
+    released: true,
+  };
+  const draft = { ...published, prompt: "Unsaved prompt" };
+  deepStrictEqual(
+    mergePublishedQuestionStates([draft], [published], [{
+      ...published,
+      spectrumPhase: "after",
+    }]),
+    [{ ...draft, spectrumPhase: "after" }],
+  );
+});

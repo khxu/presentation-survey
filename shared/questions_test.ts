@@ -10,6 +10,7 @@ import {
   normalizeApprovedQuestion,
   normalizeDraft,
   normalizeMatrixAnswer,
+  normalizeSpectrumAnswer,
   normalizeStoredQuestions,
   QuestionValidationError,
   referencesWithinSize,
@@ -18,6 +19,59 @@ import { hasOptions, QUESTION_TYPE_LABELS } from "./types.ts";
 import type { QuestionType, Survey } from "./types.ts";
 import { aggregateQuestion } from "../backend/aggregate.ts";
 import { sanitizeAnswers } from "../backend/surveys.ts";
+
+Deno.test("paired spectrum validates labels and strips proposed phase controls", () => {
+  const q = { ...newQuestion("paired_spectrum"), prompt: "Persuaded?" };
+  for (
+    const spectrumLabels of [
+      undefined,
+      { left: "", right: "Yes" },
+      { left: "No", right: " no " },
+      { left: "x".repeat(61), right: "Yes" },
+    ]
+  ) {
+    throws(
+      () => normalizeDraft({ ...q, spectrumLabels }),
+      QuestionValidationError,
+    );
+  }
+  const raw = {
+    ...q,
+    spectrumLabels: { left: " Disagree ", right: " Agree " },
+    spectrumPhase: "after",
+    isDemographic: true,
+    released: true,
+  };
+  const draft = normalizeDraft(raw);
+  deepStrictEqual(draft.spectrumLabels, { left: "Disagree", right: "Agree" });
+  ok(!("spectrumPhase" in draft));
+  const approved = normalizeApprovedQuestion(raw);
+  deepStrictEqual([
+    approved.spectrumPhase,
+    approved.released,
+    approved.isDemographic,
+  ], [
+    "before",
+    false,
+    false,
+  ]);
+});
+
+Deno.test("paired spectrum rejects malformed and out-of-range positions without coercion", () => {
+  for (const before of [-1, 101, 0.5, NaN, Infinity, "50", null, true]) {
+    deepStrictEqual(normalizeSpectrumAnswer({ before }), null);
+  }
+  for (const raw of [[], {}, 50, { before: 50, after: 101 }]) {
+    deepStrictEqual(normalizeSpectrumAnswer(raw), null);
+  }
+  deepStrictEqual(
+    normalizeSpectrumAnswer({ before: 0, after: 100, sid: "ignored" }),
+    {
+      before: 0,
+      after: 100,
+    },
+  );
+});
 
 Deno.test("all question types normalize, preserving participant fields only", () => {
   for (const type of Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]) {

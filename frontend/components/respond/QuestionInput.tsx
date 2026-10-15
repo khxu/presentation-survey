@@ -2,10 +2,12 @@
 import { useState } from "https://esm.sh/react@18.2.0";
 import type { AnswerValue, Question } from "../../../shared/types.ts";
 import { MatrixInput } from "./MatrixInput.tsx";
+import { SpectrumInput } from "./SpectrumInput.tsx";
 
 interface Props {
   q: Question;
   value: AnswerValue | undefined;
+  savedValue?: AnswerValue;
   onChange: (v: AnswerValue | undefined) => void;
 }
 
@@ -16,8 +18,17 @@ const choiceCls = (on: boolean) =>
       : "border-gray-200 bg-white hover:border-indigo-300"
   }`;
 
-export function QuestionInput({ q, value, onChange }: Props) {
+export function QuestionInput({ q, value, savedValue, onChange }: Props) {
   switch (q.type) {
+    case "paired_spectrum":
+      return (
+        <SpectrumInput
+          q={q}
+          value={value}
+          savedValue={savedValue}
+          onChange={onChange}
+        />
+      );
     case "single_choice":
       return (
         <div className="space-y-3">
