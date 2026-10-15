@@ -12,6 +12,8 @@ import {
   matrixAnswerCell,
   matrixCellKey,
   normalizeMatrixAnswer,
+  normalizeSpectrumAnswer,
+  SPECTRUM_BINS,
 } from "../shared/questions.ts";
 
 /** Instant-runoff voting: returns each round's tallies until a majority winner emerges. */
@@ -140,6 +142,46 @@ export function aggregateQuestion(
       }
       agg.distribution = dist;
       agg.mean = n ? Math.round((sum / n) * 100) / 100 : null;
+      break;
+    }
+    case "paired_spectrum": {
+      const answers = vals.map(normalizeSpectrumAnswer).filter((v) =>
+        v !== null
+      );
+      const beforeDistribution = SPECTRUM_BINS.map(() => 0);
+      const afterDistribution = SPECTRUM_BINS.map(() => 0);
+      for (const answer of answers) {
+        if (answer.before !== undefined) {
+          beforeDistribution[Math.max(0, Math.ceil(answer.before / 10) - 1)]++;
+        }
+        if (answer.after !== undefined) {
+          afterDistribution[Math.max(0, Math.ceil(answer.after / 10) - 1)]++;
+        }
+      }
+      const pairs = answers.flatMap((answer) =>
+        answer.before !== undefined && answer.after !== undefined
+          ? [{ before: answer.before, after: answer.after }]
+          : []
+      ).sort((a, b) => a.before - b.before || a.after - b.after);
+      const average = (sum: number) =>
+        pairs.length ? Math.round(sum / pairs.length * 100) / 100 : null;
+      agg.responseCount = answers.length;
+      agg.pairedSpectrum = {
+        beforeCount: answers.filter((a) => a.before !== undefined).length,
+        afterCount: answers.filter((a) => a.after !== undefined).length,
+        beforeDistribution,
+        afterDistribution,
+        pairCount: pairs.length,
+        meanBefore: average(pairs.reduce((sum, p) => sum + p.before, 0)),
+        meanAfter: average(pairs.reduce((sum, p) => sum + p.after, 0)),
+        meanChange: average(
+          pairs.reduce((sum, p) => sum + p.after - p.before, 0),
+        ),
+        leftCount: pairs.filter((p) => p.after < p.before).length,
+        rightCount: pairs.filter((p) => p.after > p.before).length,
+        unchangedCount: pairs.filter((p) => p.after === p.before).length,
+        pairs,
+      };
       break;
     }
     case "free_text": {

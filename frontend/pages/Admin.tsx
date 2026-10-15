@@ -35,6 +35,9 @@ export function Admin({ adminKey }: { adminKey: string }) {
   const [releasingQuestionId, setReleasingQuestionId] = useState<string | null>(
     null,
   );
+  const [openingQuestionId, setOpeningQuestionId] = useState<string | null>(
+    null,
+  );
   const saveTimer = useRef<number | null>(null);
   const pendingPatch = useRef<Partial<Survey>>({});
   const inFlight = useRef<Promise<void> | null>(null);
@@ -201,6 +204,31 @@ export function Admin({ adminKey }: { adminKey: string }) {
     }
   }
 
+  async function openAfter(questionId: string) {
+    setOpeningQuestionId(questionId);
+    setQuestionError(null);
+    try {
+      await flush();
+      const { survey: fresh } = await api.admin.openSpectrumAfter(
+        adminKey,
+        questionId,
+      );
+      setSavedQuestions(fresh.questions);
+      setDraftQuestions((draft) =>
+        mergePublishedQuestionStates(draft, savedQuestions, fresh.questions)
+      );
+      setSurvey(fresh);
+    } catch (error) {
+      setQuestionError(
+        error instanceof Error
+          ? error.message
+          : "Could not open after responses.",
+      );
+    } finally {
+      setOpeningQuestionId(null);
+    }
+  }
+
   if (error && !survey) {
     return (
       <div className="max-w-md mx-auto mt-24 text-center bg-white rounded-2xl shadow p-8">
@@ -233,7 +261,8 @@ export function Admin({ adminKey }: { adminKey: string }) {
 
   return (
     <fieldset
-      disabled={approving || questionSaveStatus === "saving"}
+      disabled={approving || questionSaveStatus === "saving" ||
+        openingQuestionId !== null}
       className="min-w-0 max-w-4xl mx-auto px-4 py-8"
     >
       {error && (
@@ -420,6 +449,8 @@ export function Admin({ adminKey }: { adminKey: string }) {
               releasing={releasingQuestionId === q.id}
               onReleaseChange={(released) =>
                 void setQuestionReleased(q.id, released)}
+              openingAfter={openingQuestionId === q.id}
+              onOpenAfter={() => void openAfter(q.id)}
               onChange={(nq) =>
                 setQuestions(questions.map((x) => x.id === q.id ? nq : x))}
               onDelete={() =>
@@ -446,6 +477,14 @@ export function Admin({ adminKey }: { adminKey: string }) {
               className="btn-add"
             >
               + Scale
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setQuestions([...questions, newQuestion("paired_spectrum")])}
+              className="btn-add"
+            >
+              + Before / after
             </button>
             <button
               onClick={() =>

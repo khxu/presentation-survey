@@ -2,6 +2,7 @@ import { deepStrictEqual, notEqual, ok } from "node:assert/strict";
 import handler from "../index.ts";
 import type { ProposalsPayload, Question, Survey } from "../shared/types.ts";
 import { sqlite } from "./sqlite.ts";
+import { newQuestion } from "../shared/questions.ts";
 
 const origin = "https://survey.test";
 const choice = {
@@ -59,6 +60,384 @@ async function proposals(
     cookie,
   )).json();
 }
+
+async function pairedSurvey() {
+  const created = await create();
+  const q = {
+    ...newQuestion("paired_spectrum"),
+    prompt: "Should we adopt this?",
+  };
+  const demographic = {
+    ...newQuestion("single_choice"),
+    prompt: "Role",
+    isDemographic: true,
+    released: true,
+    options: [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }],
+  };
+  const saved = await request(`/api/admin/${created.adminKey}`, "PATCH", {
+    questions: [q, demographic],
+    expectedQuestions: [],
+  });
+  deepStrictEqual(saved.status, 200);
+  const first = await request(`/api/s/${created.slug}`);
+  const second = await request(`/api/s/${created.slug}`);
+  return {
+    ...created,
+    q,
+    demographic,
+    cookieA: first.headers.get("set-cookie")!.split(";")[0],
+    cookieB: second.headers.get("set-cookie")!.split(";")[0],
+  };
+}
+
+Deno.test("API: spectrum phases freeze baselines, preserve partial updates and accept late pairs", async () => {
+  const { slug, adminKey, q, demographic, cookieA, cookieB } =
+    await pairedSurvey();
+  const phasePath = `/api/admin/${adminKey}/questions/${q.id}/phase`;
+  const submit = (answer: unknown, cookie = cookieA) =>
+    request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [q.id]: answer },
+    }, cookie);
+  try {
+    deepStrictEqual(
+      (await request(phasePath, "PATCH", { phase: "after" })).status,
+      400,
+    );
+    // On-deck input never enters the response record.
+    deepStrictEqual((await (await submit({ before: 40 })).json()).answers, {});
+    await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
+      released: true,
+    });
+    for (
+      const answer of [{ before: -1 }, { before: 101 }, { before: 1.1 }, {
+        before: "50",
+      }, {}]
+    ) {
+      deepStrictEqual((await submit(answer)).status, 400);
+    }
+    deepStrictEqual((await submit({ before: 0 })).status, 200);
+    deepStrictEqual((await submit({ before: 20 })).status, 200);
+    deepStrictEqual((await submit({ before: 20, after: 80 })).status, 409);
+    const beforePhase = await adminSurvey(adminKey);
+    const advance = await request(phasePath, "PATCH", { phase: "after" });
+    deepStrictEqual(advance.status, 200);
+    deepStrictEqual(
+      (await request(phasePath, "PATCH", { phase: "before" })).status,
+      400,
+    );
+    deepStrictEqual(
+      (await request(phasePath, "PATCH", { phase: "after" })).status,
+      409,
+    );
+    // The normal builder route cannot rewind the phase or publish a stale draft.
+    deepStrictEqual(
+      (await request(`/api/admin/${adminKey}`, "PATCH", {
+        questions: beforePhase.questions,
+        expectedQuestions: beforePhase.questions,
+      })).status,
+      409,
+    );
+    const current = await adminSurvey(adminKey);
+    deepStrictEqual(
+      (await request(`/api/admin/${adminKey}`, "PATCH", {
+        questions: current.questions.map((question) =>
+          question.id === q.id
+            ? { ...question, spectrumPhase: "before" }
+            : question
+        ),
+        expectedQuestions: current.questions,
+      })).status,
+      400,
+    );
+    deepStrictEqual((await submit({ before: 21, after: 80 })).status, 409);
+    deepStrictEqual(
+      (await (await submit({ after: 80 })).json()).answers[q.id],
+      {
+        before: 20,
+        after: 80,
+      },
+    );
+    deepStrictEqual((await (await submit({ after: 0 })).json()).answers[q.id], {
+      before: 20,
+      after: 0,
+    });
+    const otherAnswer = await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [demographic.id]: "a" },
+    }, cookieA);
+    deepStrictEqual((await otherAnswer.json()).answers[q.id], {
+      before: 20,
+      after: 0,
+    });
+    deepStrictEqual((await submit({ after: 100 }, cookieB)).status, 400);
+    deepStrictEqual((await submit({ before: 40 }, cookieB)).status, 200);
+    deepStrictEqual((await submit({ before: 41 }, cookieB)).status, 409);
+    deepStrictEqual((await submit({ after: 100 }, cookieB)).status, 200);
+    // Concurrent late baselines cannot overwrite whichever was accepted first.
+    const third = await request(`/api/s/${slug}`);
+    const cookieC = third.headers.get("set-cookie")!.split(";")[0];
+    const racing = await Promise.all([
+      submit({ before: 10 }, cookieC),
+      submit({ before: 90 }, cookieC),
+    ]);
+    deepStrictEqual(racing.map((r) => r.status).sort(), [200, 409]);
+    await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
+      released: false,
+    });
+    await submit({ before: 100, after: 100 });
+    await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
+      released: true,
+    });
+    const restored =
+      await (await request(`/api/s/${slug}`, "GET", undefined, cookieA)).json();
+    deepStrictEqual(restored.existing[q.id], { before: 20, after: 0 });
+    deepStrictEqual(
+      restored.survey.questions.find((question: Question) =>
+        question.id === q.id
+      ).spectrumPhase,
+      "after",
+    );
+    await request(`/api/admin/${adminKey}`, "PATCH", {
+      acceptingResponses: false,
+    });
+    deepStrictEqual((await submit({ after: 100 })).status, 403);
+    await request(`/api/admin/${adminKey}/responses`, "DELETE");
+    deepStrictEqual(
+      (await (await request(`/api/admin/${adminKey}/results`)).json())
+        .totalResponses,
+      0,
+    );
+  } finally {
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
+
+Deno.test("API: paired results honor reveal, hide, facets and separate CSV columns", async () => {
+  const { slug, adminKey, q, demographic, cookieA, cookieB } =
+    await pairedSurvey();
+  try {
+    await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
+      released: true,
+    });
+    await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [q.id]: { before: 0 }, [demographic.id]: "a" },
+    }, cookieA);
+    await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [q.id]: { before: 100 }, [demographic.id]: "b" },
+    }, cookieB);
+    const baseline = await (await request(`/api/admin/${adminKey}/results`))
+      .json();
+    deepStrictEqual(
+      baseline.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+      ],
+    );
+    deepStrictEqual(
+      baseline.groups[0].aggregates[0].pairedSpectrum.pairCount,
+      0,
+    );
+    await request(`/api/admin/${adminKey}`, "PATCH", { resultsVisible: true });
+    const publicBefore = await (await request(`/api/s/${slug}/results`)).json();
+    deepStrictEqual(
+      publicBefore.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
+      baseline.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
+    );
+    deepStrictEqual(
+      publicBefore.groups[0].aggregates[0].pairedSpectrum.pairs,
+      [],
+    );
+    await request(`/api/admin/${adminKey}`, "PATCH", { resultsVisible: false });
+    await request(`/api/admin/${adminKey}/questions/${q.id}/phase`, "PATCH", {
+      phase: "after",
+    });
+    await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [q.id]: { after: 100 }, [demographic.id]: "a" },
+    }, cookieA);
+    const publicPath = `/api/s/${slug}/results`;
+    deepStrictEqual((await request(publicPath)).status, 403);
+    const adminResults = await (await request(`/api/admin/${adminKey}/results`))
+      .json();
+    deepStrictEqual(adminResults.groups[0].aggregates[0].pairedSpectrum.pairs, [
+      { before: 0, after: 100 },
+    ]);
+    const csv = await (await request(`/api/admin/${adminKey}/export.csv`))
+      .text();
+    deepStrictEqual(csv.split("\n"), [
+      `"${q.prompt} (before)","${q.prompt} (after)","Role"`,
+      '"0","100","Alpha"',
+      '"100","","Beta"',
+    ]);
+    await request(`/api/admin/${adminKey}`, "PATCH", {
+      resultsVisible: true,
+      audienceFacets: true,
+    });
+    const publicResults = await (await request(publicPath)).json();
+    deepStrictEqual(
+      publicResults.groups[0].aggregates[0].pairedSpectrum.pairs,
+      [{ before: 0, after: 100 }],
+    );
+    deepStrictEqual(
+      publicResults.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
+      [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+      ],
+    );
+    deepStrictEqual(
+      publicResults.groups[0].aggregates[0].pairedSpectrum.afterDistribution,
+      [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+      ],
+    );
+    ok(!JSON.stringify(publicResults).includes(cookieA.split("=")[1]));
+    deepStrictEqual(
+      Object.keys(publicResults.groups[0].aggregates[0].pairedSpectrum.pairs[0])
+        .sort(),
+      ["after", "before"],
+    );
+    const faceted =
+      await (await request(`${publicPath}?groupBy=${demographic.id}`)).json();
+    deepStrictEqual(
+      faceted.groups.map((
+        group: { aggregates: { pairedSpectrum: { pairCount: number } }[] },
+      ) => group.aggregates[0].pairedSpectrum.pairCount),
+      [1, 0],
+    );
+    const current = await adminSurvey(adminKey);
+    await request(`/api/admin/${adminKey}`, "PATCH", {
+      questions: current.questions.map((question) =>
+        question.id === q.id ? { ...question, hidden: true } : question
+      ),
+      expectedQuestions: current.questions,
+    });
+    const hidden = await (await request(publicPath)).json();
+    ok(
+      hidden.groups[0].aggregates.every((aggregate: { questionId: string }) =>
+        aggregate.questionId !== q.id
+      ),
+    );
+    const adminHidden =
+      await (await request(`/api/admin/${adminKey}/results?includeHidden=1`))
+        .json();
+    deepStrictEqual(
+      adminHidden.groups[0].aggregates[0].pairedSpectrum.pairCount,
+      1,
+    );
+    await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
+      released: false,
+    });
+    const onDeck = await (await request(publicPath)).json();
+    ok(
+      onDeck.survey.questions.every((question: Question) =>
+        question.id !== q.id
+      ),
+    );
+  } finally {
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
+
+Deno.test("API: a phase switch racing a baseline write cannot overwrite the frozen answer", async () => {
+  const { slug, adminKey, q, cookieA } = await pairedSurvey();
+  const execute = sqlite.execute;
+  try {
+    await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
+      released: true,
+    });
+    await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [q.id]: { before: 20 } },
+    }, cookieA);
+    let intercepted = false;
+    sqlite.execute = async (statement) => {
+      const sql = typeof statement === "string" ? statement : statement.sql;
+      if (!intercepted && sql.startsWith("INSERT INTO responses")) {
+        intercepted = true;
+        deepStrictEqual(
+          (await request(
+            `/api/admin/${adminKey}/questions/${q.id}/phase`,
+            "PATCH",
+            { phase: "after" },
+          )).status,
+          200,
+        );
+      }
+      return await execute(statement);
+    };
+    const raced = await request(`/api/s/${slug}/respond`, "POST", {
+      answers: { [q.id]: { before: 99 } },
+    }, cookieA);
+    deepStrictEqual(raced.status, 409);
+    ok(intercepted);
+    const state =
+      await (await request(`/api/s/${slug}`, "GET", undefined, cookieA)).json();
+    deepStrictEqual(state.existing[q.id], { before: 20 });
+  } finally {
+    sqlite.execute = execute;
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
+
+Deno.test("API: proposed spectrum endpoints survive approval but phase and identity do not", async () => {
+  const { slug, adminKey } = await create();
+  try {
+    const draft = {
+      ...newQuestion("paired_spectrum"),
+      prompt: "Do you agree?",
+      spectrumLabels: { left: "Disagree", right: "Agree" },
+      spectrumPhase: "after",
+      isDemographic: true,
+    };
+    deepStrictEqual(
+      (await request(`/api/s/${slug}/proposals`, "POST", { question: draft }))
+        .status,
+      201,
+    );
+    const proposal = (await proposals(slug)).proposals[0];
+    ok(!("spectrumPhase" in proposal.draft));
+    const response = await request(
+      `/api/admin/${adminKey}/proposals/${proposal.id}/approve`,
+      "POST",
+      { question: draft },
+    );
+    deepStrictEqual(response.status, 200);
+    const approved = (await response.json()).approvedQuestion;
+    deepStrictEqual([
+      approved.spectrumPhase,
+      approved.released,
+      approved.isDemographic,
+    ], ["before", false, false]);
+    deepStrictEqual(approved.spectrumLabels, draft.spectrumLabels);
+    notEqual(approved.id, draft.id);
+  } finally {
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
 
 Deno.test("API: anonymous proposal, device votes, admin edits, responses, and cleanup", async () => {
   const { slug, adminKey } = await create();

@@ -24,7 +24,15 @@ export function mergePublishedQuestionStates(
   );
   const merged = draft.map((question) => {
     const fresh = freshById.get(question.id);
-    return fresh ? { ...question, released: fresh.released } : question;
+    return fresh
+      ? {
+        ...question,
+        released: fresh.released,
+        ...(question.type === "paired_spectrum" && fresh.type === question.type
+          ? { spectrumPhase: fresh.spectrumPhase }
+          : {}),
+      }
+      : question;
   });
   for (const question of freshPublished) {
     if (

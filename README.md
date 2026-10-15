@@ -63,6 +63,7 @@ labels of up to 60 characters, and up to 100 optional comparison-point labels of
 | Multiple choice (one)               | Tappable cards                                                                                                                                          | Colored bar chart; grouped bars when faceted                                                                                              |
 | Multiple choice (many)              | Tappable cards                                                                                                                                          | UpSet intersection plot with an option-total bar toggle; one plot per group when faceted                                                  |
 | Scale / rating (e.g. 1–5, 0–10 NPS) | Number grid                                                                                                                                             | Heat-colored histogram + animated mean                                                                                                    |
+| Before / after spectrum             | Two presenter-controlled rounds on a 0–100 slider with customizable endpoints                                                                           | Paired mean change, before/after means, direction counts, and one dumbbell per anonymous pair                                             |
 | **Ranked choice**                   | Tap-to-rank list with reorder                                                                                                                           | **Instant-runoff animation** — step through elimination rounds, or switch to Borda points / first choices. Per-group winners when faceted |
 | Word cloud                          | Single word/phrase                                                                                                                                      | Sized, tilted word cloud                                                                                                                  |
 | Free text                           | Textarea                                                                                                                                                | Sticky-note wall                                                                                                                          |
@@ -88,6 +89,61 @@ labels of up to 60 characters, and up to 100 optional comparison-point labels of
 - **Proposals** — review the audience's most-upvoted question drafts, edit, and
   approve
 - CSV export, clear responses, delete survey
+
+## Measuring a change of mind
+
+Add a **Before / after spectrum** question and label its endpoints, for example
+**No / Yes** or **Disagree / Agree**. Save and release it before the
+presentation. Participants choose an integer position from **0 to 100
+inclusive**; the centered slider does not count as an answer until they move it
+or explicitly choose the midpoint.
+
+The live explanation interprets the selected position using the question's
+endpoint labels, without assigning a vote to the untouched slider. Positions
+45–55 are described as neutral or mixed; 40–44 and 56–60 lean slightly toward
+their nearer endpoint, 25–39 and 61–75 moderately, and 0–24 and 76–100 strongly.
+For example, with No/Yes labels, 10 reads as strongly toward No. The same
+explanation appears when selecting an after position; it does not change the
+saved before answer.
+
+When ready, click **Freeze before & open after**. This immediate action only
+updates the saved question's phase, without publishing unrelated builder edits.
+The transition cannot be reversed: existing before answers freeze on the server,
+and participants receive an invitation to record their after position. After
+positions remain editable while the survey is accepting responses. Participants
+who join late can recall and save a before position once, then answer afterward;
+these retrospective baselines are included in the same results and may be less
+reliable than answers collected before the session. Returning to on deck and
+rereleasing a question preserves its phase and answers.
+
+Results show the number of complete pairs, paired before/after means, signed
+mean change (**after minus before**, in scale points), and counts moving toward
+each endpoint or staying unchanged. Only complete pairs contribute to those
+statistics; before/after response counts are shown separately. The scrollable
+dumbbell chart retains every complete pair, including unchanged answers and
+opposing movements, ordered by before position. This lets the audience see when
+one large swing masks many smaller swings in the mean. Demographic grouping and
+single-question focus work as for other results. Multi-choice demographic groups
+may overlap, so their counts should not be added as a unique-person total.
+
+Before/after position histograms appear as soon as positions are submitted,
+without waiting for complete pairs. Each uses ten labeled bins (0–10, 11–20,
+through 91–100) and includes every valid position in that phase, including
+incomplete pairs. The before histogram remains visible as after answers arrive;
+the after histogram appears with its first position. Both use the same count
+scale within each demographic group, show phase totals, and remain separate from
+the paired-only change statistics. The first bin includes both 0 and 10; every
+integer position belongs to exactly one bin, including 100.
+
+Paired results use the existing reveal toggle and per-question visibility
+controls. Pair numbers belong only to the current chart, not to persistent
+identities across questions. They expose no device IDs, but individual positions
+can still be recognizable in a small audience. Pairing is per browser/device,
+not verified person; switching devices or clearing cookies breaks that pairing.
+These are descriptive changes in self-reported views, not proof that the
+presentation caused them. CSV export includes separate **(before)** and
+**(after)** columns, leaving missing positions blank. Participants can also
+propose this type; approval starts a new, on-deck question in its before phase.
 
 Matrix questions have a creator-defined subject label for the symbol each
 respondent places. The respondent can drag it with a mouse, touch, or stylus,
@@ -195,5 +251,7 @@ Val Town asset utility initialize without real credentials.
 VAL_TOWN_API_KEY=local-test-placeholder deno test --allow-import --allow-env=VAL_TOWN_API_KEY \
   --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/aggregate_test.ts backend/proposal-sql_test.ts \
   frontend/lib/questionDraft_test.ts frontend/components/MatrixCellReferences_test.ts \
-  frontend/components/respond/MatrixInput_test.ts frontend/components/charts/MatrixHeatmap_test.ts
+  frontend/lib/respondFlow_test.ts frontend/components/respond/MatrixInput_test.ts \
+  frontend/components/charts/MatrixHeatmap_test.ts frontend/components/charts/SpectrumChart_test.tsx \
+  frontend/pages/Respond_test.tsx
 ```

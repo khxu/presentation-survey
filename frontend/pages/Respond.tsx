@@ -1,14 +1,20 @@
 /** @jsxImportSource https://esm.sh/react@18.2.0 */
 import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
-import type { Answers, Survey } from "../../shared/types.ts";
+import type { Answers, AnswerValue, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
-import { reconcileQuestionStep } from "../lib/respondFlow.ts";
+import {
+  hasCurrentAnswer,
+  questionStepKey,
+  reconcileQuestionStep,
+  spectrumAnswerStage,
+} from "../lib/respondFlow.ts";
 import { QuestionInput } from "../components/respond/QuestionInput.tsx";
 import { CommunityQuestions } from "../components/proposals/CommunityQuestions.tsx";
 
 export function Respond({ slug }: { slug: string }) {
   const [survey, setSurvey] = useState<Survey | null>(null);
   const [answers, setAnswers] = useState<Answers>({});
+  const [savedAnswers, setSavedAnswers] = useState<Answers>({});
   const [returning, setReturning] = useState(false);
   const [step, setStep] = useState(-1); // -1 = intro, n = question, len = done
   const [error, setError] = useState<string | null>(null);
@@ -19,6 +25,9 @@ export function Respond({ slug }: { slug: string }) {
   const pollRef = useRef<number | null>(null);
   const surveyRef = useRef<Survey | null>(null);
   const releasedQuestionIds = useRef<Set<string>>(new Set());
+  const saveVersion = useRef(0);
+  const savingRef = useRef(false);
+  const submittedSteps = useRef(new Set<string>());
 
   useEffect(() => {
     api.getSurvey(slug).then((d) => {
@@ -29,12 +38,16 @@ export function Respond({ slug }: { slug: string }) {
       setSurvey(d.survey);
       if (d.existing && Object.keys(d.existing).length) {
         setAnswers(d.existing);
+        setSavedAnswers(d.existing);
         setReturning(true);
       }
     }).catch((e) => setError(e.message));
     // Poll for survey changes (admin may add questions or toggle results mid-talk)
     pollRef.current = setInterval(() => {
+      if (savingRef.current) return;
+      const version = saveVersion.current;
       api.getSurvey(slug).then((d) => {
+        if (version !== saveVersion.current) return;
         const previous = surveyRef.current;
         if (previous) {
           setStep((currentStep) =>
@@ -51,7 +64,12 @@ export function Respond({ slug }: { slug: string }) {
         const newlyReleased = d.survey.questions.filter((question) =>
           !releasedQuestionIds.current.has(question.id)
         );
-        if (d.existing && newlyReleased.length) {
+        const changedStages = d.survey.questions.filter((question) => {
+          const prior = previous?.questions.find((q) => q.id === question.id);
+          return prior && questionStepKey(prior) !== questionStepKey(question);
+        });
+        setSavedAnswers(d.existing ?? {});
+        if (newlyReleased.length || changedStages.length) {
           setAnswers((current) => {
             const next = { ...current };
             for (const question of newlyReleased) {
@@ -61,6 +79,11 @@ export function Respond({ slug }: { slug: string }) {
               ) {
                 next[question.id] = d.existing[question.id];
               }
+            }
+            for (const question of changedStages) {
+              if (d.existing?.[question.id] !== undefined) {
+                next[question.id] = d.existing[question.id];
+              } else delete next[question.id];
             }
             return next;
           });
@@ -77,12 +100,20 @@ export function Respond({ slug }: { slug: string }) {
 
   // Save after each answer so partial progress counts and nothing is lost
   async function persist(next: Answers) {
+    savingRef.current = true;
+    saveVersion.current++;
     setSaving(true);
     try {
-      await api.respond(slug, next);
+      const result = await api.respond(slug, next);
+      setAnswers(result.answers);
+      setSavedAnswers(result.answers);
+      setError(null);
+      return true;
     } catch (e: any) {
       setError(e.message);
+      return false;
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
@@ -158,7 +189,7 @@ export function Respond({ slug }: { slug: string }) {
   if (completedQuestions !== null || step >= total) {
     const addedQuestions = completedQuestions === null
       ? []
-      : qs.filter((q) => !completedQuestions.includes(q.id));
+      : qs.filter((q) => !completedQuestions.includes(questionStepKey(q)));
     return (
       <Card>
         <div className="text-6xl mb-3">🎉</div>
@@ -179,7 +210,7 @@ export function Respond({ slug }: { slug: string }) {
           >
             {addedQuestions.length}{" "}
             new question{addedQuestions.length === 1 ? "" : "s"}{" "}
-            added - answer now
+            or after stage available - answer now
           </button>
         )}
         {survey.resultsVisible
@@ -209,20 +240,27 @@ export function Respond({ slug }: { slug: string }) {
 
   const q = qs[step];
   const v = answers[q.id];
-  const answered = v !== undefined && v !== "" &&
-    !(Array.isArray(v) && v.length === 0);
+  const answered = hasCurrentAnswer(q, v, savedAnswers[q.id]);
   const canNext = answered || !q.required;
 
-  function setAnswer(val: any) {
+  function setAnswer(val: AnswerValue | undefined) {
     const next = { ...answers };
     if (val === undefined) delete next[q.id];
     else next[q.id] = val;
     setAnswers(next);
   }
 
-  function next() {
-    persist(answers);
-    if (step === total - 1) setCompletedQuestions(qs.map((q) => q.id));
+  const needsLateBaseline = q.type === "paired_spectrum" &&
+    q.spectrumPhase === "after" &&
+    spectrumAnswerStage(q, savedAnswers[q.id]) === "before";
+
+  async function next() {
+    if (!await persist(answers)) return;
+    if (needsLateBaseline && answered) return;
+    submittedSteps.current.add(questionStepKey(q));
+    if (step === total - 1) {
+      setCompletedQuestions([...submittedSteps.current]);
+    }
     setStep(step + 1);
   }
 
@@ -241,21 +279,33 @@ export function Respond({ slug }: { slug: string }) {
       <h2 className="text-2xl font-bold mb-6 leading-snug">
         {q.prompt || "…"}
       </h2>
-      <QuestionInput q={q} value={v} onChange={setAnswer} />
+      <fieldset disabled={saving} className="min-w-0">
+        <QuestionInput
+          q={q}
+          value={v}
+          savedValue={savedAnswers[q.id]}
+          onChange={setAnswer}
+        />
+      </fieldset>
       {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
       <div className="flex gap-3 mt-8">
         <button
           onClick={() => setStep(step - 1)}
+          disabled={saving}
           className="px-5 py-3 rounded-xl border-2 border-gray-200 text-gray-600"
         >
           ←
         </button>
         <button
           onClick={next}
-          disabled={!canNext}
+          disabled={!canNext || saving}
           className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-semibold py-3 rounded-xl text-lg"
         >
-          {step === total - 1
+          {saving
+            ? "Saving..."
+            : needsLateBaseline && answered
+            ? "Save before & continue →"
+            : step === total - 1
             ? "Submit ✓"
             : answered
             ? "Next →"

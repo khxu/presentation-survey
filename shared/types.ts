@@ -2,6 +2,7 @@ export type QuestionType =
   | "single_choice"
   | "multi_choice"
   | "scale"
+  | "paired_spectrum"
   | "free_text"
   | "ranked_choice"
   | "word_cloud"
@@ -35,6 +36,38 @@ export interface MatrixAnswer {
   y: number;
 }
 
+export type SpectrumPhase = "before" | "after";
+
+export interface SpectrumLabels {
+  left: string;
+  right: string;
+}
+
+export interface PairedSpectrumAnswer {
+  before?: number;
+  after?: number;
+}
+
+export interface SpectrumPair {
+  before: number;
+  after: number;
+}
+
+export interface PairedSpectrumAggregate {
+  beforeCount: number;
+  afterCount: number;
+  beforeDistribution: number[];
+  afterDistribution: number[];
+  pairCount: number;
+  meanBefore: number | null;
+  meanAfter: number | null;
+  meanChange: number | null;
+  leftCount: number;
+  rightCount: number;
+  unchangedCount: number;
+  pairs: SpectrumPair[];
+}
+
 export interface Option {
   id: string;
   label: string;
@@ -48,6 +81,8 @@ export interface Question {
   options: Option[]; // for choice/ranked/emoji types
   scaleMin?: number; // for scale
   scaleMax?: number;
+  spectrumLabels?: SpectrumLabels;
+  spectrumPhase?: SpectrumPhase;
   matrixSize?: MatrixSize;
   matrixSubjectLabel?: string;
   matrixAxisLabels?: MatrixAxisLabels;
@@ -77,6 +112,7 @@ export type QuestionDraft = Pick<
   | "options"
   | "scaleMin"
   | "scaleMax"
+  | "spectrumLabels"
   | "matrixSize"
   | "matrixSubjectLabel"
   | "matrixAxisLabels"
@@ -100,7 +136,12 @@ export interface ProposalsPayload {
 /** Answer values: single -> optionId; multi -> optionId[]; scale -> number;
  * free_text/word_cloud -> string; ranked_choice -> optionId[] (ordered);
  * emoji -> optionId; matrix -> normalized x/y coordinates. */
-export type AnswerValue = string | number | string[] | MatrixAnswer;
+export type AnswerValue =
+  | string
+  | number
+  | string[]
+  | MatrixAnswer
+  | PairedSpectrumAnswer;
 
 export type Answers = Record<string, AnswerValue>;
 
@@ -138,6 +179,7 @@ export interface QuestionAggregate {
   matrixCounts?: Record<string, number>;
   /** For matrix questions: normalized response positions. */
   matrixPoints?: MatrixAnswer[];
+  pairedSpectrum?: PairedSpectrumAggregate;
 }
 
 export interface FacetGroup {
@@ -158,6 +200,7 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   single_choice: "Multiple choice (pick one)",
   multi_choice: "Multiple choice (pick many)",
   scale: "Scale / rating",
+  paired_spectrum: "Before / after spectrum",
   free_text: "Free text",
   ranked_choice: "Ranked choice",
   word_cloud: "Word cloud (one word/phrase)",

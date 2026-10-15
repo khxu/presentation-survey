@@ -40,7 +40,7 @@ export const api = {
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answers }),
-    }).then((r) => j<{ ok: true }>(r)),
+    }).then((r) => j<{ ok: true; answers: Answers }>(r)),
 
   publicResults: (slug: string, groupBy: string | null) =>
     fetch(`/api/s/${slug}/results${groupBy ? `?groupBy=${groupBy}` : ""}`).then(
@@ -84,6 +84,12 @@ export const api = {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ released }),
+      }).then((r) => j<{ survey: Survey }>(r)),
+    openSpectrumAfter: (key: string, questionId: string) =>
+      fetch(`/api/admin/${key}/questions/${questionId}/phase`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phase: "after" }),
       }).then((r) => j<{ survey: Survey }>(r)),
     proposals: (key: string, signal?: AbortSignal) =>
       fetch(`/api/admin/${key}/proposals`, { signal }).then((r) =>

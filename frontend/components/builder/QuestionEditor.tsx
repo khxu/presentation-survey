@@ -2,7 +2,11 @@
 import { hasOptions, QUESTION_TYPE_LABELS } from "../../../shared/types.ts";
 import type { Question, QuestionType } from "../../../shared/types.ts";
 import { uid } from "../../lib/api.ts";
-import { newQuestion, QUESTION_LIMITS } from "../../../shared/questions.ts";
+import {
+  DEFAULT_SPECTRUM_LABELS,
+  newQuestion,
+  QUESTION_LIMITS,
+} from "../../../shared/questions.ts";
 import { MatrixEditor } from "./MatrixEditor.tsx";
 
 export { newQuestion } from "../../../shared/questions.ts";
@@ -18,6 +22,8 @@ interface Props {
   published?: boolean;
   releasing?: boolean;
   onReleaseChange?: (released: boolean) => void;
+  openingAfter?: boolean;
+  onOpenAfter?: () => void;
 }
 
 const Toggle = ({ label, checked, onChange, hint }: any) => (
@@ -46,6 +52,8 @@ export function QuestionEditor({
   published = false,
   releasing = false,
   onReleaseChange,
+  openingAfter = false,
+  onOpenAfter,
 }: Props) {
   const set = (patch: Partial<Question>) => onChange({ ...q, ...patch });
 
@@ -137,6 +145,8 @@ export function QuestionEditor({
             <select
               value={q.type}
               aria-label="Question type"
+              disabled={q.type === "paired_spectrum" &&
+                q.spectrumPhase === "after"}
               onChange={(e: any) => changeType(e.target.value)}
               className="border rounded-lg px-2 py-1.5 text-sm bg-gray-50"
             >
@@ -257,6 +267,63 @@ export function QuestionEditor({
               <span className="text-gray-400">
                 (e.g. 1–5, 1–10, or 0–10 for NPS)
               </span>
+            </div>
+          )}
+
+          {q.type === "paired_spectrum" && (
+            <div className="space-y-3">
+              <div className="grid sm:grid-cols-2 gap-3">
+                {(["left", "right"] as const).map((side) => (
+                  <label key={side} className="text-sm">
+                    {side === "left" ? "0 endpoint" : "100 endpoint"}
+                    <input
+                      value={(q.spectrumLabels ?? DEFAULT_SPECTRUM_LABELS)[
+                        side
+                      ]}
+                      maxLength={QUESTION_LIMITS.spectrumLabel}
+                      onChange={(event) =>
+                        set({
+                          spectrumLabels: {
+                            ...(q.spectrumLabels ?? DEFAULT_SPECTRUM_LABELS),
+                            [side]: event.currentTarget.value,
+                          },
+                        })}
+                      className="w-full border rounded-lg px-3 py-2 mt-1"
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500">
+                A 0–100 slider records before and after positions for each
+                participant. Change statistics use complete pairs only.
+              </p>
+              {!participant && (
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <span className="font-semibold text-indigo-700">
+                    {q.spectrumPhase === "after"
+                      ? "After phase"
+                      : "Before phase"}
+                  </span>
+                  {published && q.released && q.spectrumPhase !== "after" &&
+                    onOpenAfter && (
+                    <button
+                      type="button"
+                      disabled={openingAfter || releasing}
+                      onClick={onOpenAfter}
+                      className="bg-indigo-600 text-white rounded-lg px-3 py-2 disabled:opacity-50"
+                    >
+                      {openingAfter
+                        ? "Opening..."
+                        : "Freeze before & open after"}
+                    </button>
+                  )}
+                  <span className="text-xs text-gray-500">
+                    {q.spectrumPhase === "after"
+                      ? "Existing before answers are frozen. Late arrivals can save a baseline once."
+                      : "Opening after freezes existing baselines and cannot be undone."}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

@@ -7,4 +7,5 @@ vendor
 .github
 .gitignore
 **/*_test.ts
+**/*_test.tsx
 tests

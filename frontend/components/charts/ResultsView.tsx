@@ -16,6 +16,7 @@ import {
 } from "./Charts.tsx";
 import { MatrixHeatmap } from "./MatrixHeatmap.tsx";
 import { UpSetChart } from "./UpSetChart.tsx";
+import { SpectrumChart } from "./SpectrumChart.tsx";
 
 interface Props {
   fetcher: (groupBy: string | null) => Promise<ResultsPayload>;
@@ -260,6 +261,8 @@ function Chart({ q, groups }: { q: Question; groups: FacetGroup[] }) {
       return <MultiChoiceChart q={q} groups={groups} />;
     case "scale":
       return <ScaleChart q={q} groups={groups} />;
+    case "paired_spectrum":
+      return <SpectrumChart q={q} groups={groups} />;
     case "ranked_choice":
       return <RankedChart q={q} groups={groups} />;
     case "word_cloud":

@@ -26,6 +26,13 @@ export function ProposalCard(
           Scale: {proposal.draft.scaleMin} to {proposal.draft.scaleMax}
         </p>
       )}
+      {proposal.draft.type === "paired_spectrum" && (
+        <p className="mt-2 text-sm text-gray-600">
+          Before / after: 0 · {proposal.draft.spectrumLabels?.left} to 100 ·
+          {" "}
+          {proposal.draft.spectrumLabels?.right}
+        </p>
+      )}
       {proposal.draft.type === "matrix_2x2" && (
         <div className="mt-2 text-sm text-gray-600">
           <p>
