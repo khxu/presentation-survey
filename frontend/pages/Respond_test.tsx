@@ -1,14 +1,14 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
+import { test } from "vitest";
 /// <reference lib="dom" />
 import { deepStrictEqual, equal, ok } from "node:assert/strict";
 import {
   act,
   create,
-} from "https://esm.sh/react-test-renderer@18.2.0?dev&deps=react@18.2.0,react-dom@18.2.0";
+} from "react-test-renderer";
 import type {
   ReactTestInstance,
   ReactTestRenderer,
-} from "https://esm.sh/react-test-renderer@18.2.0?dev&deps=react@18.2.0,react-dom@18.2.0";
+} from "react-test-renderer";
 import { newQuestion } from "../../shared/questions.ts";
 import type { Answers, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
@@ -19,7 +19,7 @@ function text(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.children.map(text).join("");
 }
 
-Deno.test("respondent is invited back when after opens while answering another question", async () => {
+test("respondent is invited back when after opens while answering another question", async () => {
   const q = {
     ...newQuestion("paired_spectrum"),
     prompt: "Agree?",

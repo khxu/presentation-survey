@@ -1,42 +1,25 @@
-import { sqlite } from "https://esm.town/v/std/sqlite/main.ts";
-import { proposalSchema } from "./proposal-sql.ts";
+export type Statement = { sql: string; args?: (string | number | null)[] };
 
-export { sqlite };
+export function database(db: D1Database) {
+  const prepare = ({ sql, args }: Statement) =>
+    db.prepare(sql).bind(...(args ?? []));
+  const result = ({ results, meta }: D1Result<Record<string, unknown>>) => ({
+    rows: results,
+    rowsAffected: meta.changes,
+  });
 
-let ready: Promise<void> | null = null;
-
-export function ensureSchema() {
-  if (!ready) {
-    ready = (async () => {
-      await sqlite.batch([
-        `CREATE TABLE IF NOT EXISTS surveys (
-          id TEXT PRIMARY KEY,
-          slug TEXT UNIQUE NOT NULL,
-          admin_key_hash TEXT NOT NULL,
-          title TEXT NOT NULL,
-          description TEXT NOT NULL DEFAULT '',
-          results_visible INTEGER NOT NULL DEFAULT 0,
-          accepting_responses INTEGER NOT NULL DEFAULT 1,
-          audience_facets INTEGER NOT NULL DEFAULT 0,
-          questions_json TEXT NOT NULL DEFAULT '[]',
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )`,
-        `CREATE TABLE IF NOT EXISTS responses (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          survey_id TEXT NOT NULL,
-          sid TEXT NOT NULL,
-          answers_json TEXT NOT NULL DEFAULT '{}',
-          created_at TEXT NOT NULL DEFAULT (datetime('now')),
-          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-          UNIQUE (survey_id, sid)
-        )`,
-        `CREATE INDEX IF NOT EXISTS idx_responses_survey ON responses(survey_id)`,
-        ...proposalSchema,
-      ]);
-    })();
-  }
-  return ready;
+  return {
+    async execute(statement: Statement) {
+      return result(await prepare(statement).all<Record<string, unknown>>());
+    },
+    async batch(statements: Statement[]) {
+      return (await db.batch<Record<string, unknown>>(statements.map(prepare)))
+        .map(result);
+    },
+  };
 }
+
+export type Database = ReturnType<typeof database>;
 
 export async function sha256(input: string): Promise<string> {
   const buf = await crypto.subtle.digest(

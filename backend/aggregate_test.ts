@@ -1,3 +1,4 @@
+import { test } from "vitest";
 import { deepStrictEqual } from "node:assert/strict";
 import type { Question, Survey } from "../shared/types.ts";
 import { aggregateQuestion, buildResults } from "./aggregate.ts";
@@ -21,7 +22,7 @@ function multiChoice(id = "tools"): Question {
   };
 }
 
-Deno.test("multi-choice aggregation counts exact canonical intersections", () => {
+test("multi-choice aggregation counts exact canonical intersections", () => {
   const q = multiChoice();
   const aggregate = aggregateQuestion(q, [
     { [q.id]: ["b", "a", "a", "unknown"] },
@@ -41,7 +42,7 @@ Deno.test("multi-choice aggregation counts exact canonical intersections", () =>
   ]);
 });
 
-Deno.test("multi-choice intersection ties follow question option order", () => {
+test("multi-choice intersection ties follow question option order", () => {
   const q = multiChoice();
   deepStrictEqual(
     aggregateQuestion(q, [
@@ -61,7 +62,7 @@ Deno.test("multi-choice intersection ties follow question option order", () => {
   );
 });
 
-Deno.test("faceted results aggregate independent pick-many intersections", () => {
+test("faceted results aggregate independent pick-many intersections", () => {
   const demographic: Question = {
     ...multiChoice("role"),
     type: "single_choice",
@@ -118,7 +119,7 @@ Deno.test("faceted results aggregate independent pick-many intersections", () =>
   );
 });
 
-Deno.test("matrix aggregation returns points and derived quadrant counts", () => {
+test("matrix aggregation returns points and derived quadrant counts", () => {
   const q = {
     ...newQuestion("matrix_2x2"),
     id: "matrix",
@@ -142,7 +143,7 @@ Deno.test("matrix aggregation returns points and derived quadrant counts", () =>
   });
 });
 
-Deno.test("paired statistics retain every swing and exclude incomplete or invalid pairs", () => {
+test("paired statistics retain every swing and exclude incomplete or invalid pairs", () => {
   const q = { ...newQuestion("paired_spectrum"), id: "impact" };
   const result = aggregateQuestion(q, [
     { impact: { before: 0, after: 100 } },
@@ -190,7 +191,7 @@ Deno.test("paired statistics retain every swing and exclude incomplete or invali
   );
 });
 
-Deno.test("paired facet means use matched respondents, not differences of unpaired means", () => {
+test("paired facet means use matched respondents, not differences of unpaired means", () => {
   const demographic = {
     ...multiChoice("role"),
     type: "single_choice" as const,
@@ -250,7 +251,7 @@ Deno.test("paired facet means use matched respondents, not differences of unpair
   ]);
 });
 
-Deno.test("spectrum histograms include every integer and phase independently without pairs", () => {
+test("spectrum histograms include every integer and phase independently without pairs", () => {
   const q = { ...newQuestion("paired_spectrum"), id: "impact" };
   const allBefore = Array.from(
     { length: 101 },

@@ -1,5 +1,4 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import { useCallback, useState } from "https://esm.sh/react@18.2.0";
+import { useCallback, useState } from "react";
 import { newQuestion, normalizeDraft } from "../../../shared/questions.ts";
 import type { QuestionProposal } from "../../../shared/types.ts";
 import { api } from "../../lib/api.ts";

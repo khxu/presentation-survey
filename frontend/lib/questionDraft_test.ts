@@ -1,3 +1,4 @@
+import { test } from "vitest";
 import { deepStrictEqual, equal } from "node:assert/strict";
 import type { Question } from "../../shared/types.ts";
 import {
@@ -20,7 +21,7 @@ function question(id: string, prompt: string, position: number): Question {
   };
 }
 
-Deno.test("question drafts compare against the published snapshot", () => {
+test("question drafts compare against the published snapshot", () => {
   const published = [question("a", "Published", 0)];
   equal(questionsEqual(published, [...published]), true);
   equal(
@@ -32,7 +33,7 @@ Deno.test("question drafts compare against the published snapshot", () => {
   );
 });
 
-Deno.test("published additions merge without losing local draft edits", () => {
+test("published additions merge without losing local draft edits", () => {
   const draft = [
     question("b", "Locally edited", 1),
     question("local", "Unsaved question", 0),
@@ -45,7 +46,7 @@ Deno.test("published additions merge without losing local draft edits", () => {
   );
 });
 
-Deno.test("published additions already in the draft are not duplicated", () => {
+test("published additions already in the draft are not duplicated", () => {
   const approved = question("approved", "Approved question", 1);
   const draft = [question("a", "First", 0), approved];
 
@@ -55,7 +56,7 @@ Deno.test("published additions already in the draft are not duplicated", () => {
   );
 });
 
-Deno.test("release updates preserve local edits and merge concurrent additions", () => {
+test("release updates preserve local edits and merge concurrent additions", () => {
   const published = [question("a", "Published", 0)];
   const draft = [
     { ...published[0], prompt: "Locally edited" },
@@ -70,7 +71,7 @@ Deno.test("release updates preserve local edits and merge concurrent additions",
   );
 });
 
-Deno.test("opening after merges persisted phase without publishing draft edits", () => {
+test("opening after merges persisted phase without publishing draft edits", () => {
   const published: Question = {
     ...question("impact", "Published", 0),
     type: "paired_spectrum",

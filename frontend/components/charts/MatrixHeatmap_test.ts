@@ -1,10 +1,11 @@
+import { test } from "vitest";
 import { deepStrictEqual, equal } from "node:assert/strict";
 import {
   matrixDensity,
   matrixScatterOffsets,
 } from "../../lib/matrixResults.ts";
 
-Deno.test("matrix density bins continuous positions including edges", () => {
+test("matrix density bins continuous positions including edges", () => {
   const density = matrixDensity([
     { x: 0, y: 0 },
     { x: 0.24, y: 0.24 },
@@ -15,7 +16,7 @@ Deno.test("matrix density bins continuous positions including edges", () => {
   equal(density.max, 2);
 });
 
-Deno.test("matrix scatter offsets separate identical placements deterministically", () => {
+test("matrix scatter offsets separate identical placements deterministically", () => {
   const points = [
     { x: 0.5, y: 0.5 },
     { x: 0.5, y: 0.5 },

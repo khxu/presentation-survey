@@ -1,3 +1,4 @@
+import { test } from "vitest";
 import { deepStrictEqual, notEqual, ok, throws } from "node:assert/strict";
 import {
   clampMatrixAnswerPosition,
@@ -20,7 +21,7 @@ import type { QuestionType, Survey } from "./types.ts";
 import { aggregateQuestion } from "../backend/aggregate.ts";
 import { sanitizeAnswers } from "../backend/surveys.ts";
 
-Deno.test("paired spectrum validates labels and strips proposed phase controls", () => {
+test("paired spectrum validates labels and strips proposed phase controls", () => {
   const q = { ...newQuestion("paired_spectrum"), prompt: "Persuaded?" };
   for (
     const spectrumLabels of [
@@ -57,7 +58,7 @@ Deno.test("paired spectrum validates labels and strips proposed phase controls",
   ]);
 });
 
-Deno.test("paired spectrum rejects malformed and out-of-range positions without coercion", () => {
+test("paired spectrum rejects malformed and out-of-range positions without coercion", () => {
   for (const before of [-1, 101, 0.5, NaN, Infinity, "50", null, true]) {
     deepStrictEqual(normalizeSpectrumAnswer({ before }), null);
   }
@@ -73,7 +74,7 @@ Deno.test("paired spectrum rejects malformed and out-of-range positions without 
   );
 });
 
-Deno.test("all question types normalize, preserving participant fields only", () => {
+test("all question types normalize, preserving participant fields only", () => {
   for (const type of Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]) {
     const question = newQuestion(type);
     question.prompt = "  Audience question?  ";
@@ -105,7 +106,7 @@ Deno.test("all question types normalize, preserving participant fields only", ()
   }
 });
 
-Deno.test("reject invalid types, empty or oversized prompts, and malformed input", () => {
+test("reject invalid types, empty or oversized prompts, and malformed input", () => {
   for (
     const raw of [
       null,
@@ -122,7 +123,7 @@ Deno.test("reject invalid types, empty or oversized prompts, and malformed input
   }
 });
 
-Deno.test("validate option counts, labels, and duplicates", () => {
+test("validate option counts, labels, and duplicates", () => {
   const base = { type: "single_choice", prompt: "Pick one" };
   for (
     const options of [
@@ -148,7 +149,7 @@ Deno.test("validate option counts, labels, and duplicates", () => {
   );
 });
 
-Deno.test("validate bounded integer scales", () => {
+test("validate bounded integer scales", () => {
   const base = { type: "scale", prompt: "Rate it" };
   for (
     const [scaleMin, scaleMax] of [
@@ -175,7 +176,7 @@ Deno.test("validate bounded integer scales", () => {
   );
 });
 
-Deno.test("approval uses fresh IDs, allows admin flags, and stays compatible with results", () => {
+test("approval uses fresh IDs, allows admin flags, and stays compatible with results", () => {
   const raw = {
     type: "single_choice",
     prompt: "Choose",
@@ -215,7 +216,7 @@ Deno.test("approval uses fresh IDs, allows admin flags, and stays compatible wit
   );
 });
 
-Deno.test("stored questions preserve release state and default legacy questions to released", () => {
+test("stored questions preserve release state and default legacy questions to released", () => {
   const legacy = {
     ...newQuestion("free_text"),
     released: undefined,
@@ -232,7 +233,7 @@ Deno.test("stored questions preserve release state and default legacy questions 
   );
 });
 
-Deno.test("matrix questions normalize configuration and replace untrusted reference IDs", () => {
+test("matrix questions normalize configuration and replace untrusted reference IDs", () => {
   const question = newQuestion("matrix_2x2");
   deepStrictEqual(
     [
@@ -319,7 +320,7 @@ Deno.test("matrix questions normalize configuration and replace untrusted refere
   notEqual(draft.matrixReferences?.[0].id, draft.matrixReferences?.[1].id);
 });
 
-Deno.test("matrix validation rejects unsupported grids, incomplete axes, and invalid references", () => {
+test("matrix validation rejects unsupported grids, incomplete axes, and invalid references", () => {
   const base = {
     type: "matrix_2x2",
     prompt: "Place it",
@@ -394,7 +395,7 @@ Deno.test("matrix validation rejects unsupported grids, incomplete axes, and inv
   }
 });
 
-Deno.test("matrix approval disables demographics and stored matrices receive safe defaults", () => {
+test("matrix approval disables demographics and stored matrices receive safe defaults", () => {
   const raw = {
     type: "matrix_2x2",
     prompt: "Place it",
@@ -442,7 +443,7 @@ Deno.test("matrix approval disables demographics and stored matrices receive saf
   );
 });
 
-Deno.test("stored 4x4 and 6x6 matrices are rejected", () => {
+test("stored 4x4 and 6x6 matrices are rejected", () => {
   for (const matrixSize of [4, 6]) {
     throws(
       () =>
@@ -455,7 +456,7 @@ Deno.test("stored 4x4 and 6x6 matrices are rejected", () => {
   }
 });
 
-Deno.test("matrix reference positions are normalized, preserved, and staggered per cell", () => {
+test("matrix reference positions are normalized, preserved, and staggered per cell", () => {
   deepStrictEqual(matrixReferenceDefaultPosition(0), { x: 0.24, y: 0.2 });
   deepStrictEqual(matrixReferenceDefaultPosition(1), { x: 0.76, y: 0.2 });
   deepStrictEqual(clampMatrixReferencePosition(-1), 0.08);
@@ -554,7 +555,7 @@ Deno.test("matrix reference positions are normalized, preserved, and staggered p
   );
 });
 
-Deno.test("matrix helpers, sanitization, and aggregation support continuous and legacy positions", () => {
+test("matrix helpers, sanitization, and aggregation support continuous and legacy positions", () => {
   const q = {
     ...newQuestion("matrix_2x2"),
     id: "matrix",

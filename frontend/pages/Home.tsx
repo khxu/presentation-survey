@@ -1,5 +1,4 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import { useState } from "https://esm.sh/react@18.2.0";
+import { useState } from "react";
 import { api } from "../lib/api.ts";
 import { navigate } from "../components/App.tsx";
 

@@ -1,3 +1,4 @@
+import { test } from "vitest";
 import { equal } from "node:assert/strict";
 import type { Question } from "../../shared/types.ts";
 import { newQuestion } from "../../shared/questions.ts";
@@ -22,7 +23,7 @@ function question(id: string): Question {
   };
 }
 
-Deno.test("respondent stays on the same question when earlier questions change", () => {
+test("respondent stays on the same question when earlier questions change", () => {
   const a = question("a");
   const b = question("b");
   const c = question("c");
@@ -30,19 +31,19 @@ Deno.test("respondent stays on the same question when earlier questions change",
   equal(reconcileQuestionStep([c, a, b], [a, b], 2), 1);
 });
 
-Deno.test("respondent finishes safely when the active question is unreleased", () => {
+test("respondent finishes safely when the active question is unreleased", () => {
   const a = question("a");
   const b = question("b");
   equal(reconcileQuestionStep([a, b], [a], 1), 1);
 });
 
-Deno.test("intro and completed states remain stable across releases", () => {
+test("intro and completed states remain stable across releases", () => {
   const a = question("a");
   equal(reconcileQuestionStep([], [a], -1), -1);
   equal(reconcileQuestionStep([a], [a, question("b")], 1), 2);
 });
 
-Deno.test("opening after creates a new completion step without changing question identity", () => {
+test("opening after creates a new completion step without changing question identity", () => {
   const before = newQuestion("paired_spectrum");
   const after = { ...before, spectrumPhase: "after" as const };
   equal(questionStepKey(before) === questionStepKey(after), false);
@@ -52,7 +53,7 @@ Deno.test("opening after creates a new completion step without changing question
   equal(hasCurrentAnswer(after, { before: 0, after: 0 }, { before: 0 }), true);
 });
 
-Deno.test("late respondents save a baseline before advancing to their after answer", () => {
+test("late respondents save a baseline before advancing to their after answer", () => {
   const after = {
     ...newQuestion("paired_spectrum"),
     spectrumPhase: "after" as const,

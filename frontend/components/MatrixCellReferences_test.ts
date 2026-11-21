@@ -1,3 +1,4 @@
+import { test } from "vitest";
 import { deepStrictEqual, equal } from "node:assert/strict";
 import {
   clampMatrixLabelPosition,
@@ -11,7 +12,7 @@ import {
   matrixReferenceText,
 } from "./MatrixCellReferences.tsx";
 
-Deno.test("matrix reference text includes every nonempty label", () => {
+test("matrix reference text includes every nonempty label", () => {
   equal(
     matrixReferenceText([
       { label: "First reference" },
@@ -23,11 +24,11 @@ Deno.test("matrix reference text includes every nonempty label", () => {
   );
 });
 
-Deno.test("matrix cell marker limits fit the fixed 2x2 grid", () => {
+test("matrix cell marker limits fit the fixed 2x2 grid", () => {
   equal(matrixCellMarkerLimit(2), 8);
 });
 
-Deno.test("matrix reference marker styles are deterministic and unique", () => {
+test("matrix reference marker styles are deterministic and unique", () => {
   const first = Array.from(
     { length: 100 },
     (_, index) => matrixReferenceMarkerStyle(index),
@@ -39,7 +40,7 @@ Deno.test("matrix reference marker styles are deterministic and unique", () => {
   equal(new Set(first.map((marker) => marker.key)).size, 100);
 });
 
-Deno.test("matrix reference minimap highlights exactly the selected cell", () => {
+test("matrix reference minimap highlights exactly the selected cell", () => {
   const cells = matrixReferenceMinimapCells({ row: 1, column: 0 }, 2);
   equal(cells.length, 4);
   equal(cells.filter(Boolean).length, 1);
@@ -50,7 +51,7 @@ Deno.test("matrix reference minimap highlights exactly the selected cell", () =>
   );
 });
 
-Deno.test("matrix reference position styles use bounded percentages", () => {
+test("matrix reference position styles use bounded percentages", () => {
   deepStrictEqual(matrixReferencePositionStyle(0.25, 0.75), {
     left: "25%",
     top: "75%",
@@ -63,13 +64,13 @@ Deno.test("matrix reference position styles use bounded percentages", () => {
   });
 });
 
-Deno.test("matrix annotations use the fixed 2x2 sizing", () => {
+test("matrix annotations use the fixed 2x2 sizing", () => {
   const classes = matrixAnnotationSizeClasses(2);
   equal(classes.annotation.includes("text-[10px]"), true);
   equal(classes.marker, "h-5 w-5");
 });
 
-Deno.test("matrix label positions account for rendered bounds", () => {
+test("matrix label positions account for rendered bounds", () => {
   deepStrictEqual(
     clampMatrixLabelPosition(0.1, 0.9, {
       cellWidth: 200,
@@ -90,7 +91,7 @@ Deno.test("matrix label positions account for rendered bounds", () => {
   );
 });
 
-Deno.test("matrix connectors use bounded percentage coordinates", () => {
+test("matrix connectors use bounded percentage coordinates", () => {
   deepStrictEqual(matrixReferenceConnectorPoints(0.2, 0.3, 0.8, 0.7), {
     x1: "20%",
     y1: "30%",

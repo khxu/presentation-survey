@@ -7,7 +7,7 @@ import {
   normalizeStoredQuestions,
   QUESTION_LIMITS,
 } from "../shared/questions.ts";
-import { ensureSchema, randomId, sha256, sqlite } from "./db.ts";
+import { type Database, randomId, sha256 } from "./db.ts";
 import { RequestError } from "./errors.ts";
 
 function rowToSurvey(r: Record<string, unknown>): Survey {
@@ -57,9 +57,9 @@ export function mergeReleasedAnswers(
 }
 
 export async function createSurvey(
+  sqlite: Database,
   title: string,
 ): Promise<{ survey: Survey; adminKey: string }> {
-  await ensureSchema();
   const id = randomId(12);
   const slug = randomId(6);
   const adminKey = randomId(28);
@@ -69,12 +69,11 @@ export async function createSurvey(
       `INSERT INTO surveys (id, slug, admin_key_hash, title) VALUES (?, ?, ?, ?)`,
     args: [id, slug, hash, title || "Untitled survey"],
   });
-  const survey = await getSurveyBySlug(slug);
+  const survey = await getSurveyBySlug(sqlite, slug);
   return { survey: survey!, adminKey };
 }
 
-export async function getSurveyBySlug(slug: string): Promise<Survey | null> {
-  await ensureSchema();
+export async function getSurveyBySlug(sqlite: Database, slug: string): Promise<Survey | null> {
   const r = await sqlite.execute({
     sql: `SELECT * FROM surveys WHERE slug = ?`,
     args: [slug],
@@ -83,9 +82,9 @@ export async function getSurveyBySlug(slug: string): Promise<Survey | null> {
 }
 
 export async function getSurveyByAdminKey(
+  sqlite: Database,
   adminKey: string,
 ): Promise<Survey | null> {
-  await ensureSchema();
   const hash = await sha256(adminKey);
   const r = await sqlite.execute({
     sql: `SELECT * FROM surveys WHERE admin_key_hash = ?`,
@@ -105,10 +104,10 @@ export interface SurveyPatch {
 }
 
 export async function updateSurvey(
+  sqlite: Database,
   id: string,
   patch: SurveyPatch,
 ): Promise<Survey | undefined> {
-  await ensureSchema();
   const sets: string[] = [];
   const args: (string | number)[] = [];
   let expectedPersistedQuestions: string | undefined;
@@ -242,11 +241,11 @@ export async function updateSurvey(
 }
 
 export async function setQuestionReleased(
+  sqlite: Database,
   surveyId: string,
   questionId: string,
   released: boolean,
 ): Promise<Survey> {
-  await ensureSchema();
   const currentResult = await sqlite.execute({
     sql: `SELECT * FROM surveys WHERE id = ?`,
     args: [surveyId],
@@ -279,10 +278,10 @@ export async function setQuestionReleased(
 }
 
 export async function openSpectrumAfter(
+  sqlite: Database,
   surveyId: string,
   questionId: string,
 ): Promise<Survey> {
-  await ensureSchema();
   const result = await sqlite.execute({
     sql: "SELECT * FROM surveys WHERE id = ?",
     args: [surveyId],
@@ -317,11 +316,11 @@ export async function openSpectrumAfter(
 
 /** Compare both snapshots so a phase switch or parallel response cannot undo a baseline. */
 export async function saveResponse(
+  sqlite: Database,
   surveyId: string,
   sid: string,
   raw: unknown,
 ): Promise<Answers> {
-  await ensureSchema();
   for (let attempt = 0; attempt < 3; attempt++) {
     const surveyResult = await sqlite.execute({
       sql: "SELECT * FROM surveys WHERE id = ?",
@@ -394,8 +393,7 @@ export async function saveResponse(
   );
 }
 
-export async function deleteSurvey(id: string): Promise<void> {
-  await ensureSchema();
+export async function deleteSurvey(sqlite: Database, id: string): Promise<void> {
   await sqlite.batch([
     {
       sql:
@@ -408,8 +406,7 @@ export async function deleteSurvey(id: string): Promise<void> {
   ]);
 }
 
-export async function clearResponses(surveyId: string): Promise<void> {
-  await ensureSchema();
+export async function clearResponses(sqlite: Database, surveyId: string): Promise<void> {
   await sqlite.execute({
     sql: `DELETE FROM responses WHERE survey_id = ?`,
     args: [surveyId],
@@ -417,11 +414,11 @@ export async function clearResponses(surveyId: string): Promise<void> {
 }
 
 export async function upsertResponse(
+  sqlite: Database,
   surveyId: string,
   sid: string,
   answers: Answers,
 ): Promise<void> {
-  await ensureSchema();
   await sqlite.execute({
     sql: `INSERT INTO responses (survey_id, sid, answers_json) VALUES (?, ?, ?)
           ON CONFLICT(survey_id, sid) DO UPDATE SET answers_json = excluded.answers_json, updated_at = datetime('now')`,
@@ -430,10 +427,10 @@ export async function upsertResponse(
 }
 
 export async function getResponse(
+  sqlite: Database,
   surveyId: string,
   sid: string,
 ): Promise<Answers | null> {
-  await ensureSchema();
   const r = await sqlite.execute({
     sql: `SELECT answers_json FROM responses WHERE survey_id = ? AND sid = ?`,
     args: [surveyId, sid],
@@ -441,8 +438,7 @@ export async function getResponse(
   return r.rows[0] ? JSON.parse(String(r.rows[0].answers_json)) : null;
 }
 
-export async function getAllResponses(surveyId: string): Promise<Answers[]> {
-  await ensureSchema();
+export async function getAllResponses(sqlite: Database, surveyId: string): Promise<Answers[]> {
   const r = await sqlite.execute({
     sql: `SELECT answers_json FROM responses WHERE survey_id = ? ORDER BY id`,
     args: [surveyId],
