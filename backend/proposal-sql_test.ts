@@ -1,3 +1,4 @@
+import { test } from "vitest";
 import { deepStrictEqual, notEqual, throws } from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import {
@@ -53,7 +54,7 @@ function fixture() {
   return { db, run, create, list, approve };
 }
 
-Deno.test("schema is idempotent and creation is gated by survey state", () => {
+test("schema is idempotent and creation is gated by survey state", () => {
   const f = fixture();
   try {
     proposalSchema.forEach((sql) => f.db.exec(sql));
@@ -67,7 +68,7 @@ Deno.test("schema is idempotent and creation is gated by survey state", () => {
   }
 });
 
-Deno.test("votes are unique, toggleable, retry-safe, and device-specific", () => {
+test("votes are unique, toggleable, retry-safe, and device-specific", () => {
   const f = fixture();
   try {
     f.create("p");
@@ -88,7 +89,7 @@ Deno.test("votes are unique, toggleable, retry-safe, and device-specific", () =>
   }
 });
 
-Deno.test("cross-survey, closed, missing, and approved proposals cannot be voted on", () => {
+test("cross-survey, closed, missing, and approved proposals cannot be voted on", () => {
   const f = fixture();
   try {
     f.create("p");
@@ -104,7 +105,7 @@ Deno.test("cross-survey, closed, missing, and approved proposals cannot be voted
   }
 });
 
-Deno.test("queue sorts by votes, then oldest, then stable ID", () => {
+test("queue sorts by votes, then oldest, then stable ID", () => {
   const f = fixture();
   try {
     f.create("old");
@@ -120,7 +121,7 @@ Deno.test("queue sorts by votes, then oldest, then stable ID", () => {
   }
 });
 
-Deno.test("approval is one-time, scoped, preserves questions, and assigns append positions", () => {
+test("approval is one-time, scoped, preserves questions, and assigns append positions", () => {
   const f = fixture();
   try {
     f.create("p1");
@@ -149,7 +150,7 @@ Deno.test("approval is one-time, scoped, preserves questions, and assigns append
   }
 });
 
-Deno.test("failed append rolls back the approval claim", () => {
+test("failed append rolls back the approval claim", () => {
   const f = fixture();
   try {
     f.create("p");

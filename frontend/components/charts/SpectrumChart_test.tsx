@@ -1,7 +1,7 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
+import { test } from "vitest";
 /// <reference lib="dom" />
 import { deepStrictEqual, equal, ok } from "node:assert/strict";
-import { renderToStaticMarkup } from "https://esm.sh/react-dom@18.2.0/server?deps=react@18.2.0";
+import { renderToStaticMarkup } from "react-dom/server";
 import { aggregateQuestion } from "../../../backend/aggregate.ts";
 import { newQuestion } from "../../../shared/questions.ts";
 import { SpectrumChart } from "./SpectrumChart.tsx";
@@ -10,7 +10,7 @@ import {
   SpectrumInput,
 } from "../respond/SpectrumInput.tsx";
 
-Deno.test("spectrum renders every pair including unchanged and opposing moves", () => {
+test("spectrum renders every pair including unchanged and opposing moves", () => {
   const q = newQuestion("paired_spectrum");
   const aggregate = aggregateQuestion(q, [
     { [q.id]: { before: 0, after: 100 } },
@@ -77,7 +77,7 @@ Deno.test("spectrum renders every pair including unchanged and opposing moves", 
   });
 });
 
-Deno.test("spectrum renders unpaired counts without inventing zero-valued means", () => {
+test("spectrum renders unpaired counts without inventing zero-valued means", () => {
   const q = newQuestion("paired_spectrum");
   const html = renderToStaticMarkup(
     <SpectrumChart
@@ -100,7 +100,7 @@ Deno.test("spectrum renders unpaired counts without inventing zero-valued means"
   ok(html.includes('scope="row">91–100</th><td>0</td>'));
 });
 
-Deno.test("spectrum input distinguishes unselected midpoint, late baseline and frozen before", () => {
+test("spectrum input distinguishes unselected midpoint, late baseline and frozen before", () => {
   const q = {
     ...newQuestion("paired_spectrum"),
     spectrumPhase: "after" as const,
@@ -132,7 +132,7 @@ Deno.test("spectrum input distinguishes unselected midpoint, late baseline and f
   ok(!returning.includes("Joined late?"));
 });
 
-Deno.test("spectrum interpretation mirrors strength boundaries and treats 45–55 as neutral", () => {
+test("spectrum interpretation mirrors strength boundaries and treats 45–55 as neutral", () => {
   const labels = { left: "No", right: "Yes" };
   for (
     const [value, expected] of [
@@ -162,7 +162,7 @@ Deno.test("spectrum interpretation mirrors strength boundaries and treats 45–5
   }
 });
 
-Deno.test("spectrum explanation uses the active phase and safely renders custom endpoint text", () => {
+test("spectrum explanation uses the active phase and safely renders custom endpoint text", () => {
   const q = {
     ...newQuestion("paired_spectrum"),
     spectrumLabels: { left: '<No & "never">', right: "Agree" },
@@ -196,7 +196,7 @@ Deno.test("spectrum explanation uses the active phase and safely renders custom 
   ok(after.includes("strongly toward &quot;Agree&quot;."));
 });
 
-Deno.test("spectrum distributions retain unpaired before answers after voting opens", () => {
+test("spectrum distributions retain unpaired before answers after voting opens", () => {
   const q = {
     ...newQuestion("paired_spectrum"),
     spectrumPhase: "after" as const,

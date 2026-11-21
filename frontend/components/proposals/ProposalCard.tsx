@@ -1,5 +1,4 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import type { ReactNode } from "https://esm.sh/react@18.2.0";
+import type { ReactNode } from "react";
 import type { QuestionProposal } from "../../../shared/types.ts";
 import { QUESTION_TYPE_LABELS } from "../../../shared/types.ts";
 

@@ -3,7 +3,7 @@ import {
   normalizeApprovedQuestion,
   normalizeDraft,
 } from "../shared/questions.ts";
-import { ensureSchema, randomId, sqlite } from "./db.ts";
+import { type Database, randomId } from "./db.ts";
 import { RequestError } from "./errors.ts";
 import {
   approvalStatements,
@@ -13,10 +13,10 @@ import {
 } from "./proposal-sql.ts";
 
 export async function listProposals(
+  sqlite: Database,
   surveyId: string,
   sid = "",
 ): Promise<QuestionProposal[]> {
-  await ensureSchema();
   const result = await sqlite.execute(listProposalsStatement(surveyId, sid));
   return result.rows.map((row) => ({
     id: String(row.id),
@@ -29,12 +29,12 @@ export async function listProposals(
 }
 
 export async function createProposal(
+  sqlite: Database,
   surveyId: string,
   sid: string,
   raw: unknown,
 ): Promise<void> {
   const draft = normalizeDraft(raw);
-  await ensureSchema();
   const result = await sqlite.execute(
     createProposalStatement(surveyId, sid, randomId(24), draft),
   );
@@ -44,12 +44,12 @@ export async function createProposal(
 }
 
 export async function setProposalVote(
+  sqlite: Database,
   surveyId: string,
   proposalId: string,
   sid: string,
   voted: boolean,
 ): Promise<void> {
-  await ensureSchema();
   const result = await sqlite.execute(
     voteStatement(surveyId, proposalId, sid, voted),
   );
@@ -62,15 +62,14 @@ export async function setProposalVote(
 }
 
 export async function approveProposal(
+  sqlite: Database,
   surveyId: string,
   proposalId: string,
   raw: unknown,
 ): Promise<Question> {
   const question = normalizeApprovedQuestion(raw);
-  await ensureSchema();
   const [claim] = await sqlite.batch(
     approvalStatements(surveyId, proposalId, question),
-    "write",
   );
   if (!claim.rows.length) {
     throw new RequestError(

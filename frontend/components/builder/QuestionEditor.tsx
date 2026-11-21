@@ -1,4 +1,3 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
 import { hasOptions, QUESTION_TYPE_LABELS } from "../../../shared/types.ts";
 import type { Question, QuestionType } from "../../../shared/types.ts";
 import { uid } from "../../lib/api.ts";

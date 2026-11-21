@@ -4,7 +4,7 @@ Live polling for talks. Show a QR code, let the room answer on their phones with
 **no login**, then reveal results on the projector — with ranked-choice runoffs,
 word clouds, and breakdowns by who's in the audience.
 
-**[Create a survey](url:index.ts)** · no account needed
+**[Create a survey](https://presentation-survey.kevin-hanjie-xu.workers.dev)** · no account needed
 
 ## How a talk goes
 
@@ -182,7 +182,7 @@ graph LR
     AdminAPI["/api/admin/:key/*<br/>SHA-256 key check"]
     Agg["backend/aggregate.ts<br/>IRV · Borda · facets"]
   end
-  Respond --> API --> DB[(SQLite)]
+  Respond --> API --> DB[(Cloudflare D1)]
   Results -->|poll 3s| API --> Agg
   Admin --> AdminAPI --> DB
   AdminAPI --> Agg
@@ -214,7 +214,8 @@ moved back on deck, its stored answers remain available if it is released again.
 
 ```
 index.ts                       Hono server: shell routes, public + admin API, QR SVG
-backend/db.ts                  SQLite schema, hashing, random ids
+backend/db.ts                  D1 adapter, hashing, random ids
+migrations/                    Versioned D1 schema
 backend/surveys.ts             CRUD, response upsert, answer sanitization
 backend/aggregate.ts           per-type aggregation, pick-many intersections, instant-runoff, facet bucketing
 backend/proposals.ts           proposal normalization, queries, approval workflow
@@ -223,7 +224,6 @@ backend/errors.ts              expected API error types
 shared/types.ts                Question/answer/result types shared by client & server
 shared/questions.ts            shared question defaults and proposal validation
 frontend/
-  root.tsx                     HTML shell
   index.tsx                    React mount
   lib/api.ts                   typed fetch helpers
   lib/useProposals.ts          abortable live proposal polling
@@ -240,18 +240,31 @@ frontend/
   components/charts/           Charts, matrix scatter/density results, ResultsView (polling, facets)
 ```
 
-## Proposal regression tests
+## Develop and test
 
-The tests use Deno's built-in runner and real in-memory SQLite through
-`node:sqlite`; the test configuration redirects only the Val Town SQLite import.
-No live survey data is used. The placeholder environment value lets the existing
-Val Town asset utility initialize without real credentials.
+Use Node.js 24.22.3 (the version pinned in CI). The local Worker uses an isolated
+D1 database; API tests run the production queries against a separate disposable
+D1 binding. No Val Town credentials are required.
 
 ```sh
-VAL_TOWN_API_KEY=local-test-placeholder deno test --allow-import --allow-env=VAL_TOWN_API_KEY \
-  --config tests/deno.json tests/api_test.ts shared/questions_test.ts backend/aggregate_test.ts backend/proposal-sql_test.ts \
-  frontend/lib/questionDraft_test.ts frontend/components/MatrixCellReferences_test.ts \
-  frontend/lib/respondFlow_test.ts frontend/components/respond/MatrixInput_test.ts \
-  frontend/components/charts/MatrixHeatmap_test.ts frontend/components/charts/SpectrumChart_test.tsx \
-  frontend/pages/Respond_test.tsx
+npm ci
+npx cf d1 migrations apply 00000000-0000-4000-8000-000000000001 --local
+npm run dev
+npm run build       # also generates Worker binding/runtime types
+npm run typecheck
+npm test
 ```
+
+## Deploy
+
+Sign in with `npx cf auth login` or set a scoped `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_ACCOUNT_ID`. Create separate D1 databases with `npx cf d1 create`,
+then set `D1_STAGING_DATABASE_ID` and `D1_PRODUCTION_DATABASE_ID` to their
+respective IDs. For a new empty database, apply the baseline using
+`npx cf d1 migrations apply "$DATABASE_ID"`.
+
+`npm run deploy -- staging` and `npm run deploy -- production` start read-only
+unless `SURVEY_WRITES_PAUSED=0` is supplied. Add `--dry-run` to check the build
+without uploading. GitHub Actions runs checks on every PR and supports manual
+deployment from `main`; set the matching environment's variables and token
+secret before using it.

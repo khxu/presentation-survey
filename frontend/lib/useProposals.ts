@@ -1,10 +1,9 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
 import {
   useCallback,
   useEffect,
   useRef,
   useState,
-} from "https://esm.sh/react@18.2.0";
+} from "react";
 import type { ProposalsPayload } from "../../shared/types.ts";
 
 export function useProposals(

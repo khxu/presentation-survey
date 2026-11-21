@@ -1,5 +1,4 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import { useEffect, useState } from "https://esm.sh/react@18.2.0";
+import { useEffect, useState } from "react";
 import { Home } from "../pages/Home.tsx";
 import { Admin } from "../pages/Admin.tsx";
 import { Respond } from "../pages/Respond.tsx";

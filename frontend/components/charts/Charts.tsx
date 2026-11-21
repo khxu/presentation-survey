@@ -1,5 +1,4 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import { useEffect, useState } from "https://esm.sh/react@18.2.0";
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -10,7 +9,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from "https://esm.sh/recharts@2.12.7?deps=react@18.2.0,react-dom@18.2.0";
+} from "recharts";
 import type {
   FacetGroup,
   Question,

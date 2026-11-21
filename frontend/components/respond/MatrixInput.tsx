@@ -1,5 +1,4 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import type { KeyboardEvent, PointerEvent } from "https://esm.sh/react@18.2.0";
+import type { KeyboardEvent, PointerEvent } from "react";
 import type { MatrixAnswer, Question } from "../../../shared/types.ts";
 import {
   clampMatrixAnswerPosition,

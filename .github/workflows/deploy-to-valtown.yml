@@ -1,9 +1,12 @@
 name: Deploy to Val Town
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      legacy_ref:
+        description: "Pre-Cloudflare Val Town-compatible commit SHA"
+        type: string
+        required: true
 
 concurrency:
   group: deploy-to-val-town
@@ -15,6 +18,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.legacy_ref }}
+
+      - name: Check legacy deployment inputs
+        run: test -f deno.json && test -f .vt/state.json && test ! -f cloudflare.config.ts
 
       - uses: denoland/setup-deno@v2
         with:

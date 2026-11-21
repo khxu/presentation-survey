@@ -1,0 +1,56 @@
+name: Cloudflare Worker
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Worker environment
+        type: choice
+        options: [staging, production]
+        required: true
+      open_writes:
+        description: Allow survey writes after import and cutover verification
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24.22.3"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.target }}
+    concurrency: survey-cloudflare-${{ inputs.target }}
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      D1_PRODUCTION_DATABASE_ID: ${{ vars.D1_PRODUCTION_DATABASE_ID }}
+      D1_STAGING_DATABASE_ID: ${{ vars.D1_STAGING_DATABASE_ID }}
+      SURVEY_WRITES_PAUSED: ${{ inputs.open_writes && '0' || '1' }}
+      DEPLOY_TARGET: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "24.22.3"
+          cache: npm
+      - run: npm ci
+      - run: npm run deploy -- "$DEPLOY_TARGET"

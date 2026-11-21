@@ -1,10 +1,45 @@
+import { afterAll, beforeAll, test } from "vitest";
 import { deepStrictEqual, notEqual, ok } from "node:assert/strict";
-import handler from "../index.ts";
-import type { ProposalsPayload, Question, Survey } from "../shared/types.ts";
-import { sqlite } from "./sqlite.ts";
+import { readFileSync } from "node:fs";
+import { convertV4MiniflareOptions, Miniflare } from "miniflare";
+import { type Database, database } from "../backend/db.ts";
+import { createApp } from "../index.ts";
+import type { Answers, ProposalsPayload, Question, ResultsPayload, Survey } from "../shared/types.ts";
 import { newQuestion } from "../shared/questions.ts";
+import { exportSurveys, surveyTables } from "../scripts/survey-export.ts";
 
 const origin = "https://survey.test";
+const runtime = new Miniflare(convertV4MiniflareOptions({
+  modules: true,
+  script: "export default { fetch() { return new Response(); } }",
+  d1Databases: { DB: "survey-tests", RESTORED: "survey-restore-tests" },
+}));
+let binding: D1Database;
+let sqlite: Database;
+const app = createApp(() => sqlite);
+const assets = { fetch: () => Promise.resolve(new Response("survey shell")) };
+let writesPaused = "0";
+type ApiPayload = ResultsPayload & ProposalsPayload & {
+  slug: string;
+  adminKey: string;
+  existing: Answers;
+  answers: Answers;
+  approvedQuestion: Question;
+};
+
+beforeAll(async () => {
+  const local = await runtime.getD1Database("DB");
+  const migration = readFileSync(
+    new URL("../migrations/0001_baseline.sql", import.meta.url),
+    "utf8",
+  );
+  await local.batch(migration.split(";").map((sql) => sql.trim())
+    .filter(Boolean).map((sql) => local.prepare(sql)));
+  binding = local;
+  sqlite = database(binding);
+});
+
+afterAll(() => runtime.dispose());
 const choice = {
   type: "single_choice",
   prompt: "What should we cover?",
@@ -20,17 +55,19 @@ async function request(
   method = "GET",
   body?: unknown,
   cookie?: string,
-) {
+): Promise<Omit<Response, "json"> & { json(): Promise<ApiPayload> }> {
   const headers = new Headers();
   if (body !== undefined) headers.set("Content-Type", "application/json");
   if (cookie) headers.set("Cookie", cookie);
-  return await handler(
+  const response = await app.fetch(
     new Request(origin + path, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
+    { ASSETS: assets, DB: binding, WRITES_PAUSED: writesPaused },
   );
+  return response as Omit<Response, "json"> & { json(): Promise<ApiPayload> };
 }
 
 async function create() {
@@ -90,7 +127,57 @@ async function pairedSurvey() {
   };
 }
 
-Deno.test("API: spectrum phases freeze baselines, preserve partial updates and accept late pairs", async () => {
+test("cutover gate blocks all mutation routes while leaving reads available", async () => {
+  const { slug, adminKey } = await create();
+  writesPaused = "1";
+  try {
+    deepStrictEqual((await request(`/api/s/${slug}`)).status, 200);
+    deepStrictEqual((await request(`/api/admin/${adminKey}`)).status, 200);
+    for (const [path, method] of [
+      ["/api/surveys", "POST"],
+      [`/api/s/${slug}/respond`, "POST"],
+      [`/api/s/${slug}/proposals`, "POST"],
+      [`/api/s/${slug}/proposals/test/vote`, "PUT"],
+      [`/api/admin/${adminKey}`, "PATCH"],
+      [`/api/admin/${adminKey}/proposals/test/approve`, "POST"],
+      [`/api/admin/${adminKey}/responses`, "DELETE"],
+      [`/api/admin/${adminKey}`, "DELETE"],
+    ]) {
+      deepStrictEqual((await request(path, method)).status, 503);
+    }
+  } finally {
+    writesPaused = "0";
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
+
+test("a scoped export restores into a separate D1 database with the original admin key", async () => {
+  const { slug, adminKey } = await create();
+  const source = await adminSurvey(adminKey);
+  const restored = await runtime.getD1Database("RESTORED");
+  const statements = [];
+  try {
+    for await (const chunk of exportSurveys(sqlite.execute, new AbortController().signal)) {
+      if (!chunk.startsWith("--")) statements.push(restored.prepare(chunk));
+    }
+    await restored.batch(statements);
+    for (const table of surveyTables) {
+      const sql = `SELECT COUNT(*) AS count FROM ${table}`;
+      deepStrictEqual(await restored.prepare(sql).first(), await binding.prepare(sql).first());
+    }
+    const result = await createApp().fetch(new Request(`${origin}/api/admin/${adminKey}`), {
+      ASSETS: assets,
+      DB: restored,
+      WRITES_PAUSED: "1",
+    });
+    deepStrictEqual(result.status, 200);
+    deepStrictEqual((await result.json() as { survey: Survey }).survey, source);
+  } finally {
+    await request(`/api/admin/${adminKey}`, "DELETE");
+  }
+});
+
+test("API: spectrum phases freeze baselines, preserve partial updates and accept late pairs", async () => {
   const { slug, adminKey, q, demographic, cookieA, cookieB } =
     await pairedSurvey();
   const phasePath = `/api/admin/${adminKey}/questions/${q.id}/phase`;
@@ -193,7 +280,7 @@ Deno.test("API: spectrum phases freeze baselines, preserve partial updates and a
     deepStrictEqual(
       restored.survey.questions.find((question: Question) =>
         question.id === q.id
-      ).spectrumPhase,
+      )?.spectrumPhase,
       "after",
     );
     await request(`/api/admin/${adminKey}`, "PATCH", {
@@ -211,7 +298,7 @@ Deno.test("API: spectrum phases freeze baselines, preserve partial updates and a
   }
 });
 
-Deno.test("API: paired results honor reveal, hide, facets and separate CSV columns", async () => {
+test("API: paired results honor reveal, hide, facets and separate CSV columns", async () => {
   const { slug, adminKey, q, demographic, cookieA, cookieB } =
     await pairedSurvey();
   try {
@@ -227,7 +314,7 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
     const baseline = await (await request(`/api/admin/${adminKey}/results`))
       .json();
     deepStrictEqual(
-      baseline.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
+      baseline.groups[0].aggregates[0].pairedSpectrum!.beforeDistribution,
       [
         1,
         0,
@@ -242,17 +329,17 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
       ],
     );
     deepStrictEqual(
-      baseline.groups[0].aggregates[0].pairedSpectrum.pairCount,
+      baseline.groups[0].aggregates[0].pairedSpectrum!.pairCount,
       0,
     );
     await request(`/api/admin/${adminKey}`, "PATCH", { resultsVisible: true });
     const publicBefore = await (await request(`/api/s/${slug}/results`)).json();
     deepStrictEqual(
-      publicBefore.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
-      baseline.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
+      publicBefore.groups[0].aggregates[0].pairedSpectrum!.beforeDistribution,
+      baseline.groups[0].aggregates[0].pairedSpectrum!.beforeDistribution,
     );
     deepStrictEqual(
-      publicBefore.groups[0].aggregates[0].pairedSpectrum.pairs,
+      publicBefore.groups[0].aggregates[0].pairedSpectrum!.pairs,
       [],
     );
     await request(`/api/admin/${adminKey}`, "PATCH", { resultsVisible: false });
@@ -266,7 +353,7 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
     deepStrictEqual((await request(publicPath)).status, 403);
     const adminResults = await (await request(`/api/admin/${adminKey}/results`))
       .json();
-    deepStrictEqual(adminResults.groups[0].aggregates[0].pairedSpectrum.pairs, [
+    deepStrictEqual(adminResults.groups[0].aggregates[0].pairedSpectrum!.pairs, [
       { before: 0, after: 100 },
     ]);
     const csv = await (await request(`/api/admin/${adminKey}/export.csv`))
@@ -282,11 +369,11 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
     });
     const publicResults = await (await request(publicPath)).json();
     deepStrictEqual(
-      publicResults.groups[0].aggregates[0].pairedSpectrum.pairs,
+      publicResults.groups[0].aggregates[0].pairedSpectrum!.pairs,
       [{ before: 0, after: 100 }],
     );
     deepStrictEqual(
-      publicResults.groups[0].aggregates[0].pairedSpectrum.beforeDistribution,
+      publicResults.groups[0].aggregates[0].pairedSpectrum!.beforeDistribution,
       [
         1,
         0,
@@ -301,7 +388,7 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
       ],
     );
     deepStrictEqual(
-      publicResults.groups[0].aggregates[0].pairedSpectrum.afterDistribution,
+      publicResults.groups[0].aggregates[0].pairedSpectrum!.afterDistribution,
       [
         0,
         0,
@@ -317,16 +404,14 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
     );
     ok(!JSON.stringify(publicResults).includes(cookieA.split("=")[1]));
     deepStrictEqual(
-      Object.keys(publicResults.groups[0].aggregates[0].pairedSpectrum.pairs[0])
+      Object.keys(publicResults.groups[0].aggregates[0].pairedSpectrum!.pairs[0])
         .sort(),
       ["after", "before"],
     );
     const faceted =
       await (await request(`${publicPath}?groupBy=${demographic.id}`)).json();
     deepStrictEqual(
-      faceted.groups.map((
-        group: { aggregates: { pairedSpectrum: { pairCount: number } }[] },
-      ) => group.aggregates[0].pairedSpectrum.pairCount),
+      faceted.groups.map((group) => group.aggregates[0].pairedSpectrum!.pairCount),
       [1, 0],
     );
     const current = await adminSurvey(adminKey);
@@ -346,7 +431,7 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
       await (await request(`/api/admin/${adminKey}/results?includeHidden=1`))
         .json();
     deepStrictEqual(
-      adminHidden.groups[0].aggregates[0].pairedSpectrum.pairCount,
+      adminHidden.groups[0].aggregates[0].pairedSpectrum!.pairCount,
       1,
     );
     await request(`/api/admin/${adminKey}/questions/${q.id}/release`, "PATCH", {
@@ -363,7 +448,7 @@ Deno.test("API: paired results honor reveal, hide, facets and separate CSV colum
   }
 });
 
-Deno.test("API: a phase switch racing a baseline write cannot overwrite the frozen answer", async () => {
+test("API: a phase switch racing a baseline write cannot overwrite the frozen answer", async () => {
   const { slug, adminKey, q, cookieA } = await pairedSurvey();
   const execute = sqlite.execute;
   try {
@@ -375,7 +460,7 @@ Deno.test("API: a phase switch racing a baseline write cannot overwrite the froz
     }, cookieA);
     let intercepted = false;
     sqlite.execute = async (statement) => {
-      const sql = typeof statement === "string" ? statement : statement.sql;
+      const { sql } = statement;
       if (!intercepted && sql.startsWith("INSERT INTO responses")) {
         intercepted = true;
         deepStrictEqual(
@@ -403,7 +488,7 @@ Deno.test("API: a phase switch racing a baseline write cannot overwrite the froz
   }
 });
 
-Deno.test("API: proposed spectrum endpoints survive approval but phase and identity do not", async () => {
+test("API: proposed spectrum endpoints survive approval but phase and identity do not", async () => {
   const { slug, adminKey } = await create();
   try {
     const draft = {
@@ -439,7 +524,7 @@ Deno.test("API: proposed spectrum endpoints survive approval but phase and ident
   }
 });
 
-Deno.test("API: anonymous proposal, device votes, admin edits, responses, and cleanup", async () => {
+test("API: anonymous proposal, device votes, admin edits, responses, and cleanup", async () => {
   const { slug, adminKey } = await create();
   try {
     const first = await request(`/api/s/${slug}`);
@@ -545,7 +630,7 @@ Deno.test("API: anonymous proposal, device votes, admin edits, responses, and cl
     deepStrictEqual((await response.json()).answers[q.id], q.options[0].id);
     const results = await (await request(`/api/admin/${adminKey}/results`))
       .json();
-    deepStrictEqual(results.groups[0].aggregates[0].counts[q.options[0].id], 1);
+    deepStrictEqual(results.groups[0].aggregates[0].counts![q.options[0].id], 1);
 
     await request(`/api/admin/${adminKey}/responses`, "DELETE");
     const saved = await sqlite.execute({
@@ -573,7 +658,7 @@ Deno.test("API: anonymous proposal, device votes, admin edits, responses, and cl
   }
 });
 
-Deno.test("API: invalid input, closed surveys, and cross-survey operations", async () => {
+test("API: invalid input, closed surveys, and cross-survey operations", async () => {
   const a = await create();
   const b = await create();
   try {
@@ -634,11 +719,12 @@ Deno.test("API: invalid input, closed surveys, and cross-survey operations", asy
       })).status,
       400,
     );
-    const malformed = await handler(
+    const malformed = await app.fetch(
       new Request(`${origin}/api/s/${a.slug}/proposals`, {
         method: "POST",
         body: "{",
       }),
+      { ASSETS: assets, DB: binding, WRITES_PAUSED: writesPaused },
     );
     deepStrictEqual(malformed.status, 400);
     deepStrictEqual(
@@ -703,7 +789,7 @@ Deno.test("API: invalid input, closed surveys, and cross-survey operations", asy
   }
 });
 
-Deno.test("API: concurrent approvals append once and stale builder saves cannot erase them", async () => {
+test("API: concurrent approvals append once and stale builder saves cannot erase them", async () => {
   const { slug, adminKey } = await create();
   try {
     await request(`/api/s/${slug}/proposals`, "POST", { question: choice });
@@ -751,7 +837,7 @@ Deno.test("API: concurrent approvals append once and stale builder saves cannot 
   }
 });
 
-Deno.test("API: approval returns the persisted appended question", async () => {
+test("API: approval returns the persisted appended question", async () => {
   const { slug, adminKey } = await create();
   try {
     const initial: Question = {
@@ -789,7 +875,7 @@ Deno.test("API: approval returns the persisted appended question", async () => {
   }
 });
 
-Deno.test("API: on-deck questions stay private and preserve answers across unrelease", async () => {
+test("API: on-deck questions stay private and preserve answers across unrelease", async () => {
   const { slug, adminKey } = await create();
   try {
     const released: Question = {
@@ -929,7 +1015,7 @@ Deno.test("API: on-deck questions stay private and preserve answers across unrel
   }
 });
 
-Deno.test("API: legacy saved questions remain released and can be edited", async () => {
+test("API: legacy saved questions remain released and can be edited", async () => {
   const { slug, adminKey } = await create();
   try {
     const legacy = {
@@ -960,7 +1046,7 @@ Deno.test("API: legacy saved questions remain released and can be edited", async
   }
 });
 
-Deno.test("API: matrix proposals, responses, results, and CSV export", async () => {
+test("API: matrix proposals, responses, results, and CSV export", async () => {
   const { slug, adminKey } = await create();
   try {
     const matrix = {
@@ -1068,12 +1154,12 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
     const results = await (await request(`/api/admin/${adminKey}/results`))
       .json();
     deepStrictEqual(results.groups[0].aggregates[0].responseCount, 1);
-    deepStrictEqual(results.groups[0].aggregates[0].matrixCounts["0,1"], 1);
+    deepStrictEqual(results.groups[0].aggregates[0].matrixCounts!["0,1"], 1);
     deepStrictEqual(results.groups[0].aggregates[0].matrixPoints, [
       { x: 0.75, y: 0.25 },
     ]);
     deepStrictEqual(
-      Object.keys(results.groups[0].aggregates[0].matrixCounts).length,
+      Object.keys(results.groups[0].aggregates[0].matrixCounts!).length,
       4,
     );
 
@@ -1089,7 +1175,7 @@ Deno.test("API: matrix proposals, responses, results, and CSV export", async () 
   }
 });
 
-Deno.test("API: pick-many results expose canonical exact intersections", async () => {
+test("API: pick-many results expose canonical exact intersections", async () => {
   const { slug, adminKey } = await create();
   try {
     const question: Question = {

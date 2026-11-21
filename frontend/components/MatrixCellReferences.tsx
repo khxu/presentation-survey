@@ -1,10 +1,9 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import { useEffect, useRef, useState } from "https://esm.sh/react@18.2.0";
+import { useEffect, useRef, useState } from "react";
 import type {
   KeyboardEvent,
   MouseEvent,
   PointerEvent,
-} from "https://esm.sh/react@18.2.0";
+} from "react";
 import type { MatrixReference, MatrixSize } from "../../shared/types.ts";
 import {
   clampMatrixReferencePosition,

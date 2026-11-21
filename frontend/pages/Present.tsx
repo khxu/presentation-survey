@@ -1,5 +1,4 @@
-/** @jsxImportSource https://esm.sh/react@18.2.0 */
-import { useEffect, useState } from "https://esm.sh/react@18.2.0";
+import { useEffect, useState } from "react";
 import { api } from "../lib/api.ts";
 
 /** Fullscreen "join" slide: big QR + URL. Put this on the projector. */
