@@ -31,6 +31,16 @@ export function mergePublishedQuestionStates(
         ...(question.type === "paired_spectrum" && fresh.type === question.type
           ? { spectrumPhase: fresh.spectrumPhase }
           : {}),
+        ...(fresh.type === "brief_iat" && fresh.biatLocked
+          ? {
+            type: fresh.type,
+            biatLocked: true,
+            biat: fresh.biat,
+            prompt: fresh.prompt,
+            options: fresh.options,
+            isDemographic: false,
+          }
+          : {}),
       }
       : question;
   });

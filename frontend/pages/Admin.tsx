@@ -486,6 +486,13 @@ export function Admin({ adminKey }: { adminKey: string }) {
               + Before / after
             </button>
             <button
+              type="button"
+              onClick={() => setQuestions([...questions, newQuestion("brief_iat")])}
+              className="btn-add"
+            >
+              + Brief IAT
+            </button>
+            <button
               onClick={() =>
                 setQuestions([...questions, newQuestion("ranked_choice")])}
               className="btn-add"

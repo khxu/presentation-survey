@@ -14,10 +14,46 @@ import type { Answers, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
 import { QuestionInput } from "../components/respond/QuestionInput.tsx";
 import { Respond } from "./Respond.tsx";
+import { BiatInput } from "../components/respond/BiatInput.tsx";
 
 function text(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.children.map(text).join("");
 }
+
+test("returning respondents can continue past a required completed Brief IAT without submitting again", async () => {
+  const q = { ...newQuestion("brief_iat"), required: true, released: true };
+  const survey: Survey = {
+    id: "s", slug: "s", title: "Brief IAT", description: "", createdAt: "",
+    acceptingResponses: true, resultsVisible: false, audienceFacets: false, questions: [q],
+  };
+  const original = { ...api };
+  let writes = 0;
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    api.getSurvey = async () => ({ survey, existing: { [q.id]: { biatComplete: true } } });
+    api.proposals = async () => ({ proposals: [], acceptingResponses: true });
+    api.respond = async () => {
+      writes++;
+      return { ok: true, answers: {} };
+    };
+    await act(() => { renderer = create(<Respond slug="s" />); });
+    const root = renderer!.root;
+    const click = async (label: string) => {
+      const button = root.findAllByType("button").find((item) => text(item).includes(label));
+      ok(button);
+      await act(async () => { await button.props.onClick(); });
+    };
+    await click("Review my answers");
+    equal(root.findAllByType(BiatInput).length, 0);
+    ok(root.findAllByType("p").some((p) => text(p) === "Brief IAT complete."));
+    await click("Submit");
+    equal(writes, 0);
+    ok(root.findAllByType("h1").some((h) => text(h) === "Thanks!"));
+  } finally {
+    if (renderer) await act(() => renderer!.unmount());
+    Object.assign(api, original);
+  }
+});
 
 test("respondent is invited back when after opens while answering another question", async () => {
   const q = {

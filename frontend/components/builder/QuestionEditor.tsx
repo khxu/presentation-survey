@@ -7,6 +7,7 @@ import {
   QUESTION_LIMITS,
 } from "../../../shared/questions.ts";
 import { MatrixEditor } from "./MatrixEditor.tsx";
+import { BIAT_CATEGORIES, BIAT_CATEGORY_LABELS } from "../../../shared/biat.ts";
 
 export { newQuestion } from "../../../shared/questions.ts";
 
@@ -144,12 +145,13 @@ export function QuestionEditor({
             <select
               value={q.type}
               aria-label="Question type"
-              disabled={q.type === "paired_spectrum" &&
-                q.spectrumPhase === "after"}
+              disabled={q.biatLocked || (q.type === "paired_spectrum" &&
+                q.spectrumPhase === "after")}
               onChange={(e: any) => changeType(e.target.value)}
               className="border rounded-lg px-2 py-1.5 text-sm bg-gray-50"
             >
-              {Object.entries(QUESTION_TYPE_LABELS).map(([k, v]) => (
+              {Object.entries(QUESTION_TYPE_LABELS)
+                .filter(([k]) => !participant || k !== "brief_iat").map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
@@ -168,12 +170,12 @@ export function QuestionEditor({
                     onChange={(v: boolean) => set({ isDemographic: v })}
                   />
                 )}
-                <Toggle
+                {q.type !== "brief_iat" && <Toggle
                   label="Hide results"
                   hint="Never show this question's results to the audience"
                   checked={q.hidden}
                   onChange={(v: boolean) => set({ hidden: v })}
-                />
+                />}
                 {onDelete && (
                   <button
                     onClick={onDelete}
@@ -189,11 +191,66 @@ export function QuestionEditor({
           <input
             value={q.prompt}
             aria-label="Question prompt"
+            disabled={q.biatLocked}
             maxLength={QUESTION_LIMITS.prompt}
             onChange={(e: any) => set({ prompt: e.target.value })}
             placeholder="Question prompt…"
             className="w-full border-b-2 border-gray-200 focus:border-indigo-400 focus:outline-none py-1 text-lg font-medium"
           />
+
+          {q.type === "brief_iat" && q.biat && (
+            <fieldset disabled={q.biatLocked} className="grid gap-3">
+              <p className="text-sm text-gray-600">
+                Add two target categories and two attribute categories. Use four distinct
+                examples per category. The focal attribute is paired with each target in
+                turn. Results are always presenter-only.
+              </p>
+              {q.biatLocked && (
+                <p className="text-sm text-gray-600">
+                  The test is locked because it was released. Create a new question to change it.
+                </p>
+              )}
+              {BIAT_CATEGORIES.map((key) => {
+                const config = q.biat!;
+                const category = config[key];
+                const name = BIAT_CATEGORY_LABELS[key];
+                return (
+                  <fieldset key={key} className="grid grid-cols-2 gap-2 min-w-0">
+                    <legend className="text-sm font-medium">{name}</legend>
+                    <input
+                      aria-label={`${name} label`}
+                      placeholder={`${name} label`}
+                      className="col-span-2 border rounded p-2 min-w-0"
+                      maxLength={60}
+                      value={category.label}
+                      onChange={(e) => set({
+                        biat: { ...config, [key]: { ...category, label: e.target.value } },
+                      })}
+                    />
+                    {category.stimuli.map((stimulus, index) => (
+                      <input
+                        key={index}
+                        aria-label={`${name} stimulus ${index + 1}`}
+                        placeholder={`Example ${index + 1}`}
+                        className="border rounded p-2 min-w-0"
+                        maxLength={60}
+                        value={stimulus}
+                        onChange={(e) => set({
+                          biat: {
+                            ...config,
+                            [key]: {
+                              ...category,
+                              stimuli: category.stimuli.map((value, i) => i === index ? e.target.value : value),
+                            },
+                          },
+                        })}
+                      />
+                    ))}
+                  </fieldset>
+                );
+              })}
+            </fieldset>
+          )}
 
           {hasOptions(q.type) && (
             <div className="space-y-1.5">

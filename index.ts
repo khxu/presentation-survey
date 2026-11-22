@@ -3,7 +3,8 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { getCookie, setCookie } from "hono/cookie";
 import QRCode from "qrcode";
-import { buildResults } from "./backend/aggregate.ts";
+import { aggregateQuestion, buildResults } from "./backend/aggregate.ts";
+import { biatSchedule } from "./backend/biat.ts";
 import { type Database, database, randomId } from "./backend/db.ts";
 import {
   clearResponses,
@@ -16,6 +17,8 @@ import {
   getSurveyBySlug,
   openSpectrumAfter,
   publicSurvey,
+  releasedBiat,
+  saveBiat,
   saveResponse,
   setQuestionReleased,
   updateSurvey,
@@ -33,6 +36,7 @@ import {
   QuestionValidationError,
 } from "./shared/questions.ts";
 import type { Question, Survey } from "./shared/types.ts";
+import { isBiatScore } from "./shared/biat.ts";
 
 type AppEnv = {
   Bindings: {
@@ -143,6 +147,30 @@ export function createApp(getDatabase = database) {
     return c.json({ ok: true, answers });
   });
 
+  const biatPath = "/api/s/:slug/biat/:questionId";
+  app.get(biatPath, async (c) => {
+    const survey = await getSurveyBySlug(c.var.db, c.req.param("slug"));
+    if (!survey) throw new RequestError("Survey not found.", 404);
+    const question = releasedBiat(survey, c.req.param("questionId"));
+    if (!survey.acceptingResponses) throw new RequestError("This survey is closed.", 403);
+    const sid = getOrSetSid(c);
+    const existing = await getResponse(c.var.db, survey.id, sid);
+    c.header("Cache-Control", "no-store");
+    if (isBiatScore(existing?.[question.id])) return c.json({ biatComplete: true });
+    return c.json(await biatSchedule(survey.id, question.id, sid));
+  });
+
+  app.post(biatPath, bodyLimit({
+    maxSize: 8 * 1024,
+    onError: (c) => c.json({ error: "Brief IAT attempts must be smaller than 8 KB." }, 413),
+  }), async (c) => {
+    const survey = await getSurveyBySlug(c.var.db, c.req.param("slug"));
+    if (!survey) throw new RequestError("Survey not found.", 404);
+    const body = await questionBody(c.req.raw);
+    await saveBiat(c.var.db, survey.id, getOrSetSid(c), c.req.param("questionId"), body);
+    return c.json({ biatComplete: true });
+  });
+
   app.get("/api/s/:slug/proposals", async (c) => {
     const survey = await getSurveyBySlug(c.var.db, c.req.param("slug"));
     if (!survey) return c.json({ error: "Not found" }, 404);
@@ -196,6 +224,8 @@ export function createApp(getDatabase = database) {
       return c.json({ error: "Results are not visible yet." }, 403);
     }
     const visibleSurvey = publicSurvey(survey);
+    visibleSurvey.questions = visibleSurvey.questions.filter((q) => q.type !== "brief_iat")
+      .map((q, position) => ({ ...q, position }));
     const requestedGroup = visibleSurvey.audienceFacets
       ? c.req.query("groupBy") || null
       : null;
@@ -205,7 +235,14 @@ export function createApp(getDatabase = database) {
         )
       ? requestedGroup
       : null;
-    const responses = await getAllResponses(c.var.db, survey.id);
+    const hasBiat = survey.questions.some((q) => q.type === "brief_iat");
+    const responses = (await getAllResponses(c.var.db, survey.id)).flatMap((answer) => {
+      const entries = Object.entries(answer);
+      const ordinary = entries.filter(([, value]) => !isBiatScore(value));
+      return !ordinary.length && (hasBiat || entries.length)
+        ? []
+        : [Object.fromEntries(ordinary)];
+    });
     const visible = visibleSurvey.questions.filter((q) => !q.hidden);
     return c.json({
       survey: visibleSurvey,
@@ -320,7 +357,9 @@ export function createApp(getDatabase = database) {
       survey,
       totalResponses: responses.length,
       groupBy,
-      groups: buildResults(survey, responses, groupBy, visible),
+      groups: buildResults(survey, responses, groupBy, visible.filter((q) => q.type !== "brief_iat")),
+      privateBiat: visible.filter((q) => q.type === "brief_iat")
+        .map((q) => aggregateQuestion(q, responses)),
     });
   });
 
@@ -331,6 +370,8 @@ export function createApp(getDatabase = database) {
     const header = survey.questions.flatMap((q: Question) =>
       q.type === "paired_spectrum"
         ? [esc(`${q.prompt} (before)`), esc(`${q.prompt} (after)`)]
+        : q.type === "brief_iat"
+        ? [esc(`${q.prompt} (D-score)`), esc(`${q.prompt} (scoring status)`)]
         : [esc(q.prompt)]
     ).join(",");
     const optLabel = (q: Question, id: string) =>
@@ -338,6 +379,10 @@ export function createApp(getDatabase = database) {
     const rows = responses.map((r) =>
       survey.questions.flatMap((q: Question) => {
         const v = r[q.id];
+        if (q.type === "brief_iat") {
+          return isBiatScore(v) ? [esc(v.score), esc(v.status)] : [esc(""), esc("")];
+        }
+        if (isBiatScore(v)) return esc("");
         if (q.type === "paired_spectrum") {
           const answer = normalizeSpectrumAnswer(v);
           return [esc(answer?.before), esc(answer?.after)];

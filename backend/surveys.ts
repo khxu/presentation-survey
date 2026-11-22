@@ -1,4 +1,5 @@
 import type { Answers, Question, Survey } from "../shared/types.ts";
+import { isBiatScore } from "../shared/biat.ts";
 import {
   canonicalizeChoiceSelection,
   normalizeDraft,
@@ -9,6 +10,7 @@ import {
 } from "../shared/questions.ts";
 import { type Database, randomId, sha256 } from "./db.ts";
 import { RequestError } from "./errors.ts";
+import { biatSchedule, scoreBiat } from "./biat.ts";
 
 function rowToSurvey(r: Record<string, unknown>): Survey {
   return {
@@ -40,9 +42,14 @@ export function filterAnswers(
   questions: Question[],
 ): Answers | null {
   if (!answers) return null;
-  const visible = new Set(questions.map((question) => question.id));
+  const visible = new Map(questions.map((question) => [question.id, question.type]));
   return Object.fromEntries(
-    Object.entries(answers).filter(([questionId]) => visible.has(questionId)),
+    Object.entries(answers).flatMap(([id, value]): [string, Answers[string]][] => {
+      const type = visible.get(id);
+      if (!type) return [];
+      if (type === "brief_iat") return isBiatScore(value) ? [[id, { biatComplete: true }]] : [];
+      return isBiatScore(value) ? [] : [[id, value]];
+    }),
   );
 }
 
@@ -52,7 +59,9 @@ export function mergeReleasedAnswers(
   incoming: Answers,
 ): Answers {
   const merged = { ...(existing ?? {}) };
-  for (const question of releasedQuestions) delete merged[question.id];
+  for (const question of releasedQuestions) {
+    if (question.type !== "brief_iat") delete merged[question.id];
+  }
   return { ...merged, ...incoming };
 }
 
@@ -177,6 +186,25 @@ export async function updateSurvey(
     expectedPersistedQuestions = String(currentJson);
     const qs = patch.questions.map((q, i) => {
       const stored = currentQuestions.find((question) => question.id === q.id);
+      if (stored?.type === "brief_iat" && stored.biatLocked && q.type !== stored.type) {
+        throw new RequestError("A released Brief IAT cannot change type.", 400);
+      }
+      if (q.type === "brief_iat") {
+        const draft = normalizeDraft(q, true);
+        const locked = stored?.type === "brief_iat" && stored.biatLocked === true;
+        if (locked && (draft.prompt !== stored.prompt ||
+          JSON.stringify(draft.biat) !== JSON.stringify(stored.biat))) {
+          throw new RequestError("A released Brief IAT cannot change. Create a new question instead.", 400);
+        }
+        return {
+          ...q,
+          ...draft,
+          biatLocked: locked || stored?.released === true || q.released === true,
+          isDemographic: false,
+          position: i,
+          released: q.released === true,
+        };
+      }
       if (
         stored?.type === "paired_spectrum" &&
         stored.spectrumPhase === "after" && q.type !== stored.type
@@ -257,7 +285,9 @@ export async function setQuestionReleased(
     throw new RequestError("Question not found.", 404);
   }
   const questions = current.questions.map((question) =>
-    question.id === questionId ? { ...question, released } : question
+    question.id === questionId
+      ? { ...question, released, ...(question.type === "brief_iat" && released ? { biatLocked: true } : {}) }
+      : question
   );
   const result = await sqlite.execute({
     sql:
@@ -314,12 +344,11 @@ export async function openSpectrumAfter(
   return rowToSurvey(updated.rows[0] as Record<string, unknown>);
 }
 
-/** Compare both snapshots so a phase switch or parallel response cannot undo a baseline. */
-export async function saveResponse(
+async function updateResponse(
   sqlite: Database,
   surveyId: string,
   sid: string,
-  raw: unknown,
+  edit: (visible: Survey, existing: Answers) => Answers | null | Promise<Answers | null>,
 ): Promise<Answers> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const surveyResult = await sqlite.execute({
@@ -341,6 +370,41 @@ export async function saveResponse(
       ? {}
       : JSON.parse(String(snapshot));
     const visible = publicSurvey(survey);
+    const answers = await edit(visible, existing);
+    if (!answers) return filterAnswers(existing, visible.questions)!;
+    // Both snapshots must still match: another write or release change wins and we retry.
+    const result = await sqlite.execute({
+      sql: `INSERT INTO responses (survey_id, sid, answers_json)
+        SELECT ?, ?, ? WHERE EXISTS (
+          SELECT 1 FROM surveys WHERE id = ? AND questions_json = ? AND accepting_responses = 1
+        )
+        ON CONFLICT(survey_id, sid) DO UPDATE
+        SET answers_json = excluded.answers_json, updated_at = datetime('now')
+        WHERE responses.answers_json = ?`,
+      args: [
+        surveyId,
+        sid,
+        JSON.stringify(answers),
+        surveyId,
+        String(row.questions_json),
+        snapshot === undefined ? "" : String(snapshot),
+      ],
+    });
+    if (result.rowsAffected) return filterAnswers(answers, visible.questions)!;
+  }
+  throw new RequestError(
+    "Responses changed in another tab. Reload and retry.",
+    409,
+  );
+}
+
+export function saveResponse(
+  sqlite: Database,
+  surveyId: string,
+  sid: string,
+  raw: unknown,
+): Promise<Answers> {
+  return updateResponse(sqlite, surveyId, sid, (visible, existing) => {
     const incoming = sanitizeAnswers(visible, raw);
     const answers = mergeReleasedAnswers(existing, visible.questions, incoming);
     for (const q of visible.questions) {
@@ -368,29 +432,31 @@ export async function saveResponse(
       }
       if (merged.before !== undefined) answers[q.id] = merged;
     }
-    const result = await sqlite.execute({
-      sql: `INSERT INTO responses (survey_id, sid, answers_json)
-        SELECT ?, ?, ? WHERE EXISTS (
-          SELECT 1 FROM surveys WHERE id = ? AND questions_json = ? AND accepting_responses = 1
-        )
-        ON CONFLICT(survey_id, sid) DO UPDATE
-        SET answers_json = excluded.answers_json, updated_at = datetime('now')
-        WHERE responses.answers_json = ?`,
-      args: [
-        surveyId,
-        sid,
-        JSON.stringify(answers),
-        surveyId,
-        String(row.questions_json),
-        snapshot === undefined ? "" : String(snapshot),
-      ],
-    });
-    if (result.rowsAffected) return filterAnswers(answers, visible.questions)!;
-  }
-  throw new RequestError(
-    "Responses changed in another tab. Reload and retry.",
-    409,
+    return answers;
+  });
+}
+
+export function releasedBiat(survey: Survey, questionId: string): Question {
+  const question = survey.questions.find((q) =>
+    q.id === questionId && q.type === "brief_iat" && q.released
   );
+  if (!question) throw new RequestError("This Brief IAT is not available.", 404);
+  return question;
+}
+
+export async function saveBiat(
+  sqlite: Database,
+  surveyId: string,
+  sid: string,
+  questionId: string,
+  raw: unknown,
+): Promise<void> {
+  await updateResponse(sqlite, surveyId, sid, async (visible, existing) => {
+    releasedBiat(visible, questionId);
+    if (isBiatScore(existing[questionId])) return null;
+    const schedule = await biatSchedule(surveyId, questionId, sid);
+    return { ...existing, [questionId]: scoreBiat(schedule, raw) };
+  });
 }
 
 export async function deleteSurvey(sqlite: Database, id: string): Promise<void> {

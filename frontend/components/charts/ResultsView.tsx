@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type {
   FacetGroup,
   Question,
+  QuestionAggregate,
   ResultsPayload,
 } from "../../../shared/types.ts";
 import {
@@ -195,7 +196,13 @@ export function ResultsView(
       )}
 
       <div className={focus ? "" : "grid gap-5"}>
-        {shownQuestions.map((q, i) => (
+        {shownQuestions.map((q) => q.type === "brief_iat" ? (
+          <BiatResults
+            key={q.id}
+            q={q}
+            aggregate={data.privateBiat?.find((a) => a.questionId === q.id)?.biat}
+          />
+        ) : (
           <QuestionCard
             key={q.id}
             q={q}
@@ -211,6 +218,27 @@ export function ResultsView(
         </p>
       )}
     </div>
+  );
+}
+
+function BiatResults({ q, aggregate }: { q: Question; aggregate: QuestionAggregate["biat"] }) {
+  if (!q.biat || !aggregate) return null;
+  const { targetA, targetB, focalAttribute } = q.biat;
+  return (
+    <section className="bg-white rounded-2xl shadow p-5">
+      <p className="text-xs text-gray-500">Brief IAT · Presenter only · All respondents</p>
+      <h2 className="text-xl font-bold mt-1">{q.prompt}</h2>
+      <p className="mt-2">
+        Mean D-score: {aggregate.mean === null ? "Not available" : aggregate.mean.toFixed(2)}
+      </p>
+      <p className="text-sm text-gray-600">
+        {aggregate.scored} scored · {aggregate.unscored} unscored
+      </p>
+      <p className="text-sm text-gray-600 mt-2">
+        Positive values mean faster sorting when {targetA.label} was paired with {focalAttribute.label};
+        negative values mean faster sorting when {targetB.label} was paired with {focalAttribute.label}.
+      </p>
+    </section>
   );
 }
 

@@ -31,8 +31,8 @@ word clouds, and breakdowns by who's in the audience.
 
 ## Community questions
 
-Participants can propose any supported question type, including options, scale
-bounds, or matrix configuration. Pending proposals are public, sorted by upvotes
+Participants can propose any supported question type except the presenter-only
+Brief IAT, including options, scale bounds, or matrix configuration. Pending proposals are public, sorted by upvotes
 (oldest first on ties), and refresh every 5 seconds while the page is visible.
 Each device can toggle one upvote per proposal; submitting a proposal does not
 automatically vote for it. Proposals do not require answering the survey first,
@@ -69,6 +69,42 @@ labels of up to 60 characters, and up to 100 optional comparison-point labels of
 | Free text                           | Textarea                                                                                                                                                | Sticky-note wall                                                                                                                          |
 | Emoji reaction                      | Emoji grid                                                                                                                                              | Floating emoji bubbles scaled by count                                                                                                    |
 | **2×2 matrix**                      | Drag/touch placement of a creator-labeled symbol anywhere in the plane, with tap and keyboard fallbacks, axis endpoints, and optional comparison points | Toggleable placement scatter plot and density heatmap with the same comparison points; one matrix per facet group                         |
+| **Brief Implicit Association Test** | Two timed rounds of word sorting, using touch or a physical keyboard | Presenter-only scored/unscored counts, group mean D-score, and score/status CSV |
+
+## Brief Implicit Association Test
+
+Add a **Brief IAT** in the presenter’s builder. Name two target categories and
+two attribute categories, each with four distinct text examples. Pick the
+attribute to pair with both targets by filling the **Focal attribute** category;
+for an attitude test, prefer the positive attribute as the focal one. Save and
+release the test like any other question. Once released, its wording and
+categories are locked, even if it goes back on deck.
+
+Each round contains 20 trials. Respondents sort into the displayed pair or
+**Everything else** with the on-screen buttons or the **I** and **E** keys,
+respectively. The target is switched for the second round, with block order
+counterbalanced across respondents. The mobile flow is designed for **1–3
+minutes**; this is a target, not a time limit. Respondents can restart an
+interrupted, unsubmitted run. After submission they see completion only and
+cannot retake using the same browser cookie.
+
+The presenter sees scored and unscored counts, an ungrouped mean D-score,
+and a score/status CSV. Positive scores mean faster sorting with Target A
+paired with the focal attribute; negative scores mean faster sorting with
+Target B paired with it. Results are never shown in the audience results
+view. Raw timing logs are not retained. Scores describe relative sorting
+speed in this task, not an individual diagnosis. Touch and keyboard scores
+have not been established as interchangeable.
+
+The design follows the [two-block Brief IAT](https://doi.org/10.1027/1618-3169.56.4.283).
+Scoring applies the [BIAT D procedure](https://doi.org/10.1371/journal.pone.0110938)
+to one block pair: discard each round's first four trials and responses longer
+than 10 seconds, exclude attempts with more than 10% fast initial responses
+(under 300 ms) among retained trials, and keep error-correction time in the
+latency. Clamp retained latencies to 400–2,000 ms, then divide the
+Target B minus Target A mean difference by the sample standard deviation
+across the retained trials from both blocks. Insufficient data or zero
+variance yields a completed but unscored attempt.
 
 ## Admin controls
 
