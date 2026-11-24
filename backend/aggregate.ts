@@ -79,6 +79,17 @@ export function aggregateQuestion(
   };
 
   switch (q.type) {
+    case "brief_iat": {
+      const attempts = vals.filter(isBiatScore);
+      const scores = attempts.flatMap(({ score }) => score === null ? [] : [score]);
+      agg.responseCount = attempts.length;
+      agg.biat = {
+        scored: scores.length,
+        unscored: attempts.length - scores.length,
+        mean: scores.length ? scores.reduce((sum, n) => sum + n, 0) / scores.length : null,
+      };
+      break;
+    }
     case "single_choice":
     case "emoji_reaction": {
       const counts: Record<string, number> = {};
@@ -316,3 +327,4 @@ export function buildResults(
   }
   return groups;
 }
+import { isBiatScore } from "../shared/biat.ts";

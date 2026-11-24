@@ -7,7 +7,50 @@ export type QuestionType =
   | "ranked_choice"
   | "word_cloud"
   | "emoji_reaction"
-  | "matrix_2x2";
+  | "matrix_2x2"
+  | "brief_iat";
+
+export type BiatTarget = "targetA" | "targetB";
+export type BiatCategory = BiatTarget | "focalAttribute" | "otherAttribute";
+export type BiatConfig = Record<BiatCategory, { label: string; stimuli: string[] }>;
+
+export interface BiatTrial {
+  category: BiatCategory;
+  stimulus: number;
+}
+
+export interface BiatBlock {
+  target: BiatTarget;
+  trials: BiatTrial[];
+}
+
+export interface BiatSchedule {
+  version: 1;
+  blocks: [BiatBlock, BiatBlock];
+}
+
+export interface BiatTrialResult extends BiatTrial {
+  latencyMs: number;
+  initialLatencyMs: number;
+  input: "keyboard" | "pointer";
+}
+
+export interface BiatAttempt {
+  version: 1;
+  blocks: BiatTrialResult[][];
+}
+
+export interface BiatCompletion {
+  biatComplete: true;
+}
+
+export interface BiatScore {
+  version: 1;
+  firstTarget: BiatTarget;
+  input: BiatTrialResult["input"] | "mixed";
+  score: number | null;
+  status: "scored" | "too_fast" | "insufficient_data" | "no_variance";
+}
 
 export type MatrixSize = 2;
 
@@ -87,6 +130,8 @@ export interface Question {
   matrixSubjectLabel?: string;
   matrixAxisLabels?: MatrixAxisLabels;
   matrixReferences?: MatrixReference[];
+  biat?: BiatConfig;
+  biatLocked?: boolean;
   isDemographic: boolean;
   required: boolean;
   released: boolean; // available to respondents and eligible for public results
@@ -117,6 +162,7 @@ export type QuestionDraft = Pick<
   | "matrixSubjectLabel"
   | "matrixAxisLabels"
   | "matrixReferences"
+  | "biat"
 >;
 
 export interface QuestionProposal {
@@ -141,7 +187,9 @@ export type AnswerValue =
   | number
   | string[]
   | MatrixAnswer
-  | PairedSpectrumAnswer;
+  | PairedSpectrumAnswer
+  | BiatCompletion
+  | BiatScore;
 
 export type Answers = Record<string, AnswerValue>;
 
@@ -180,6 +228,7 @@ export interface QuestionAggregate {
   /** For matrix questions: normalized response positions. */
   matrixPoints?: MatrixAnswer[];
   pairedSpectrum?: PairedSpectrumAggregate;
+  biat?: { scored: number; unscored: number; mean: number | null };
 }
 
 export interface FacetGroup {
@@ -194,6 +243,7 @@ export interface ResultsPayload {
   totalResponses: number;
   groupBy: string | null;
   groups: FacetGroup[];
+  privateBiat?: QuestionAggregate[];
 }
 
 export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
@@ -206,6 +256,7 @@ export const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
   word_cloud: "Word cloud (one word/phrase)",
   emoji_reaction: "Emoji reaction",
   matrix_2x2: "2×2 matrix",
+  brief_iat: "Brief Implicit Association Test",
 };
 
 export const DEFAULT_EMOJIS = ["🔥", "😍", "🤔", "😴", "😂", "🤯"];

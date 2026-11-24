@@ -4,6 +4,7 @@ import type {
   SpectrumPhase,
 } from "../../shared/types.ts";
 import { normalizeSpectrumAnswer } from "../../shared/questions.ts";
+import { isBiatComplete } from "../../shared/biat.ts";
 
 export function questionStepKey(question: Question): string {
   return question.type === "paired_spectrum"
@@ -26,6 +27,7 @@ export function hasCurrentAnswer(
   value: AnswerValue | undefined,
   savedValue: AnswerValue | undefined,
 ): boolean {
+  if (question.type === "brief_iat") return isBiatComplete(savedValue);
   if (question.type === "paired_spectrum") {
     return normalizeSpectrumAnswer(value)?.[
       spectrumAnswerStage(question, savedValue)

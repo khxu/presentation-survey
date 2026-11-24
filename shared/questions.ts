@@ -1,4 +1,5 @@
 import { DEFAULT_EMOJIS, hasOptions, QUESTION_TYPE_LABELS } from "./types.ts";
+import { BIAT_CATEGORIES, BIAT_CATEGORY_LABELS, BIAT_STIMULI, emptyBiat } from "./biat.ts";
 import type {
   MatrixAnswer,
   MatrixAxisLabels,
@@ -117,6 +118,7 @@ export function newQuestion(type: QuestionType = "single_choice"): Question {
         matrixReferences: [],
       }
       : {}),
+    ...(type === "brief_iat" ? { biat: emptyBiat() } : {}),
     isDemographic: false,
     required: false,
     released: false,
@@ -483,7 +485,7 @@ function coordinatePair(
 }
 
 /** Ignore client IDs and admin flags; every approved question gets fresh identifiers. */
-export function normalizeDraft(raw: unknown): QuestionDraft {
+export function normalizeDraft(raw: unknown, presenter = false): QuestionDraft {
   const input = record(raw);
   if (
     typeof input.type !== "string" ||
@@ -492,6 +494,9 @@ export function normalizeDraft(raw: unknown): QuestionDraft {
     throw new QuestionValidationError("Choose a supported question type.");
   }
   const type = input.type as QuestionType;
+  if (type === "brief_iat" && !presenter) {
+    throw new QuestionValidationError("Only presenters can create a Brief IAT.");
+  }
   const draft: QuestionDraft = {
     type,
     prompt: text(input.prompt, QUESTION_LIMITS.prompt, "Question prompt"),
@@ -565,6 +570,38 @@ export function normalizeDraft(raw: unknown): QuestionDraft {
       input.matrixReferences,
       input.matrixSize,
     );
+  }
+  if (type === "brief_iat") {
+    const config = record(input.biat);
+    const biat = emptyBiat();
+    const labels = new Set<string>();
+    const stimuli = new Set<string>();
+    for (const key of BIAT_CATEGORIES) {
+      const category = record(config[key]);
+      const name = BIAT_CATEGORY_LABELS[key];
+      const label = text(category.label, 60, `${name} label`);
+      const identity = label.normalize("NFKC").toLowerCase();
+      if (labels.has(identity)) {
+        throw new QuestionValidationError("Brief IAT category labels must be distinct.");
+      }
+      labels.add(identity);
+      if (!Array.isArray(category.stimuli) || category.stimuli.length !== BIAT_STIMULI) {
+        throw new QuestionValidationError(`${name} requires ${BIAT_STIMULI} stimuli.`);
+      }
+      biat[key] = {
+        label,
+        stimuli: category.stimuli.map((raw: unknown) => {
+          const stimulus = text(raw, 60, `${name} stimulus`);
+          const identity = stimulus.normalize("NFKC").toLowerCase();
+          if (stimuli.has(identity)) {
+            throw new QuestionValidationError("Brief IAT stimuli must be distinct across all categories.");
+          }
+          stimuli.add(identity);
+          return stimulus;
+        }),
+      };
+    }
+    draft.biat = biat;
   }
   return draft;
 }

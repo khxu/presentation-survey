@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Answers, AnswerValue, Survey } from "../../shared/types.ts";
+import type { Answers, AnswerValue, Question, Survey } from "../../shared/types.ts";
 import { api } from "../lib/api.ts";
 import {
   hasCurrentAnswer,
@@ -9,6 +9,7 @@ import {
 } from "../lib/respondFlow.ts";
 import { QuestionInput } from "../components/respond/QuestionInput.tsx";
 import { CommunityQuestions } from "../components/proposals/CommunityQuestions.tsx";
+import { BiatInput } from "../components/respond/BiatInput.tsx";
 
 export function Respond({ slug }: { slug: string }) {
   const [survey, setSurvey] = useState<Survey | null>(null);
@@ -27,6 +28,11 @@ export function Respond({ slug }: { slug: string }) {
   const saveVersion = useRef(0);
   const savingRef = useRef(false);
   const submittedSteps = useRef(new Set<string>());
+  const activeQuestion = useRef<Question | undefined>(undefined);
+
+  useEffect(() => {
+    activeQuestion.current = survey?.questions[step];
+  }, [survey, step]);
 
   useEffect(() => {
     api.getSurvey(slug).then((d) => {
@@ -49,6 +55,11 @@ export function Respond({ slug }: { slug: string }) {
         if (version !== saveVersion.current) return;
         const previous = surveyRef.current;
         if (previous) {
+          const currentQuestion = activeQuestion.current;
+          if (currentQuestion?.type === "brief_iat" &&
+            !d.survey.questions.some((question) => question.id === currentQuestion.id)) {
+            setError("The presenter moved this Brief IAT back on deck. It is not available right now.");
+          }
           setStep((currentStep) =>
             reconcileQuestionStep(
               previous.questions,
@@ -254,7 +265,7 @@ export function Respond({ slug }: { slug: string }) {
     spectrumAnswerStage(q, savedAnswers[q.id]) === "before";
 
   async function next() {
-    if (!await persist(answers)) return;
+    if (q.type !== "brief_iat" && !await persist(answers)) return;
     if (needsLateBaseline && answered) return;
     submittedSteps.current.add(questionStepKey(q));
     if (step === total - 1) {
@@ -279,12 +290,25 @@ export function Respond({ slug }: { slug: string }) {
         {q.prompt || "…"}
       </h2>
       <fieldset disabled={saving} className="min-w-0">
-        <QuestionInput
+        {q.type === "brief_iat" ? answered ? (
+          <p role="status" className="text-emerald-700">Brief IAT complete.</p>
+        ) : q.biat && (
+          <BiatInput
+            key={q.id}
+            slug={slug}
+            questionId={q.id}
+            config={q.biat}
+            onComplete={() => {
+              saveVersion.current++;
+              setSavedAnswers((current) => ({ ...current, [q.id]: { biatComplete: true } }));
+            }}
+          />
+        ) : <QuestionInput
           q={q}
           value={v}
           savedValue={savedAnswers[q.id]}
           onChange={setAnswer}
-        />
+        />}
       </fieldset>
       {error && <p className="text-red-600 text-sm mt-3">{error}</p>}
       <div className="flex gap-3 mt-8">

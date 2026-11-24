@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { convertV4MiniflareOptions, Miniflare } from "miniflare";
 import { type Database, database } from "../backend/db.ts";
 import { createApp } from "../index.ts";
-import type { Answers, ProposalsPayload, Question, ResultsPayload, Survey } from "../shared/types.ts";
+import type { Answers, BiatAttempt, BiatSchedule, ProposalsPayload, Question, ResultsPayload, Survey } from "../shared/types.ts";
+import { BIAT_CATEGORIES, emptyBiat } from "../shared/biat.ts";
 import { newQuestion } from "../shared/questions.ts";
 import { exportSurveys, surveyTables } from "../scripts/survey-export.ts";
 
@@ -126,6 +127,87 @@ async function pairedSurvey() {
     cookieB: second.headers.get("set-cookie")!.split(";")[0],
   };
 }
+
+test("Brief IAT: release lock, one private score, ordinary edits, and public isolation", async () => {
+  const { slug, adminKey } = await create();
+  const admin = `/api/admin/${adminKey}`;
+  const respondent = `/api/s/${slug}`;
+  const biat = emptyBiat();
+  for (const category of BIAT_CATEGORIES) {
+    biat[category] = { label: category, stimuli: [1, 2, 3, 4].map((i) => `${category} ${i}`) };
+  }
+  const q = { ...newQuestion("brief_iat"), prompt: "Private timed test", biat };
+  const ordinary = { ...newQuestion("free_text"), prompt: "Comment", released: true };
+  const path = `${respondent}/biat/${q.id}`;
+  const released = (value: boolean) => request(`${admin}/questions/${q.id}/release`, "PATCH", { released: value });
+  const initial = await request(respondent);
+  const cookie = initial.headers.get("set-cookie")!.split(";")[0];
+  const other = (await request(respondent)).headers.get("set-cookie")!.split(";")[0];
+
+  deepStrictEqual((await request(`${respondent}/proposals`, "POST", { question: q }, cookie)).status, 400);
+  const invalid = structuredClone(q);
+  invalid.biat.targetA.stimuli[0] = invalid.biat.targetB.stimuli[0];
+  deepStrictEqual((await request(admin, "PATCH", { questions: [invalid], expectedQuestions: [] })).status, 400);
+  deepStrictEqual((await request(admin, "PATCH", {
+    questions: [q, ordinary], expectedQuestions: [], resultsVisible: true,
+  })).status, 200);
+  deepStrictEqual((await request(path, "GET", undefined, cookie)).status, 404);
+  deepStrictEqual((await released(true)).status, 200);
+  const scheduleResponse = await request(path, "GET", undefined, cookie);
+  const schedule: BiatSchedule = await scheduleResponse.clone().json();
+  const attempt: BiatAttempt = {
+    version: schedule.version,
+    blocks: schedule.blocks.map(({ target, trials }) => trials.map((trial) => ({
+      ...trial, latencyMs: target === "targetA" ? 600 : 900, initialLatencyMs: 600, input: "pointer",
+    }))),
+  };
+  deepStrictEqual((await request(path, "POST", { ...attempt, blocks: [attempt.blocks[0]] }, cookie)).status, 400);
+  deepStrictEqual((await request(`${respondent}/respond`, "POST", {
+    answers: { [q.id]: { biatComplete: true } },
+  }, cookie)).status, 200);
+  const publicBefore = await (await request(`${respondent}/results`)).json();
+  const submits = await Promise.all([
+    request(path, "POST", attempt, cookie),
+    request(path, "POST", attempt, cookie),
+  ]);
+  for (const response of submits) {
+    deepStrictEqual(response.status, 200);
+    deepStrictEqual(await response.json(), { biatComplete: true });
+  }
+  deepStrictEqual(await (await request(path, "GET", undefined, cookie)).json(), { biatComplete: true });
+  deepStrictEqual((await (await request(respondent, "GET", undefined, cookie)).json()).existing, {
+    [q.id]: { biatComplete: true },
+  });
+  deepStrictEqual(await (await request(`${respondent}/results`)).json(), publicBefore);
+  deepStrictEqual(publicBefore.survey.questions.map(({ id }) => id), [ordinary.id]);
+
+  const saved = await request(`${respondent}/respond`, "POST", {
+    answers: { [ordinary.id]: "Saved alongside timed test" },
+  }, cookie);
+  deepStrictEqual((await saved.json()).answers[q.id], { biatComplete: true });
+  deepStrictEqual(await (await request(path, "POST", {}, cookie)).json(), { biatComplete: true });
+  const results = await (await request(`${admin}/results`)).json();
+  deepStrictEqual(results.privateBiat?.[0].biat, {
+    scored: 1, unscored: 0, mean: 300 / Math.sqrt(720000 / 31),
+  });
+  const csv = await (await request(`${admin}/export.csv`)).text();
+  ok(csv.includes('"Private timed test (D-score)","Private timed test (scoring status)"'));
+  ok(csv.includes('"scored","Saved alongside timed test"'));
+  ok(!csv.includes("latencyMs"));
+
+  await request(admin, "PATCH", { acceptingResponses: false });
+  deepStrictEqual((await request(path, "POST", attempt, other)).status, 403);
+  await request(admin, "PATCH", { acceptingResponses: true });
+  await released(false);
+  deepStrictEqual((await request(path, "POST", attempt, other)).status, 404);
+  const current = await adminSurvey(adminKey);
+  deepStrictEqual((await request(admin, "PATCH", {
+    expectedQuestions: current.questions,
+    questions: current.questions.map((question) =>
+      question.id === q.id ? { ...question, prompt: "Changed after release" } : question
+    ),
+  })).status, 400);
+});
 
 test("cutover gate blocks all mutation routes while leaving reads available", async () => {
   const { slug, adminKey } = await create();

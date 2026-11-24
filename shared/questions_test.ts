@@ -74,10 +74,15 @@ test("paired spectrum rejects malformed and out-of-range positions without coerc
   );
 });
 
-test("all question types normalize, preserving participant fields only", () => {
+test("community question types normalize, preserving participant fields only", () => {
   for (const type of Object.keys(QUESTION_TYPE_LABELS) as QuestionType[]) {
     const question = newQuestion(type);
     question.prompt = "  Audience question?  ";
+    if (type === "brief_iat") {
+      throws(() => normalizeDraft(question), /Only presenters/);
+      throws(() => normalizeApprovedQuestion(question), /Only presenters/);
+      continue;
+    }
     if (hasOptions(type)) {
       question.options = [{ id: "a", label: " Yes " }, {
         id: "b",

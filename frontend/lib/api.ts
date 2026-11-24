@@ -1,5 +1,8 @@
 import type {
   Answers,
+  BiatAttempt,
+  BiatCompletion,
+  BiatSchedule,
   ProposalsPayload,
   Question,
   QuestionDraft,
@@ -41,6 +44,17 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ answers }),
     }).then((r) => j<{ ok: true; answers: Answers }>(r)),
+
+  biatSchedule: (slug: string, id: string) =>
+    fetch(`/api/s/${slug}/biat/${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => j<BiatSchedule | BiatCompletion>(r)),
+
+  submitBiat: (slug: string, id: string, attempt: BiatAttempt) =>
+    fetch(`/api/s/${slug}/biat/${encodeURIComponent(id)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(attempt),
+    }).then((r) => j<BiatCompletion>(r)),
 
   publicResults: (slug: string, groupBy: string | null) =>
     fetch(`/api/s/${slug}/results${groupBy ? `?groupBy=${groupBy}` : ""}`).then(
