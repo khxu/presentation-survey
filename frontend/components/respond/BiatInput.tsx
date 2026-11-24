@@ -21,6 +21,15 @@ type Run =
   | { phase: "trial"; schedule: BiatSchedule; block: number; trial: number }
   | { phase: "submit"; attempt: BiatAttempt };
 
+const primaryActionCls =
+  "w-full bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 text-white font-semibold py-3.5 px-5 rounded-xl text-lg shadow-sm border-2 border-indigo-700 transition cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2";
+
+const sortButtonCls =
+  "min-h-[4.5rem] rounded-xl border-2 border-indigo-300 bg-indigo-50 hover:bg-indigo-100 active:bg-indigo-200 px-3 py-3 font-semibold text-indigo-900 shadow-sm transition cursor-pointer touch-manipulation focus:outline-none focus:ring-2 focus:ring-indigo-400";
+
+const kbdCls =
+  "inline-block px-1.5 py-0.5 text-xs font-mono font-semibold bg-white text-gray-700 border border-gray-300 rounded shadow-sm";
+
 export function BiatInput({ slug, questionId, config, onComplete }: Props) {
   const [run, setRun] = useState<Run>({ phase: "intro" });
   const [visibleRun, setVisibleRun] = useState<Run | null>(null);
@@ -163,43 +172,48 @@ export function BiatInput({ slug, questionId, config, onComplete }: Props) {
             </li>
           ))}
         </ul>
-        <button type="button" disabled={busy} className="btn-add" onClick={() => void load()}>
-          {busy ? "Loading…" : "Start Brief IAT"}
+        <button type="button" disabled={busy} className={primaryActionCls} onClick={() => void load()}>
+          {busy ? "Loading…" : "Start Brief IAT →"}
         </button>
       </>}
       {block && (run.phase === "block" || run.phase === "trial") && <>
-        <p className="text-sm text-gray-600">Round {run.block + 1} of {run.schedule.blocks.length}</p>
+        <p className="text-sm font-medium text-gray-600">Round {run.block + 1} of {run.schedule.blocks.length}</p>
         {run.phase === "block" ? <>
           <p>
             Choose <strong>{config[block.target].label} or {config.focalAttribute.label}</strong> for
             words from either of those categories, and <strong>Everything else</strong> for other words.
-            Use the buttons or press <kbd>E</kbd> for everything else and <kbd>I</kbd> for the pair.
+            Use the buttons or press <kbd className={kbdCls}>E</kbd> for everything else and{" "}
+            <kbd className={kbdCls}>I</kbd> for the pair.
             If you make a mistake, choose the other answer.
           </p>
-          <button type="button" className="btn-add" onClick={() => {
+          <button type="button" className={primaryActionCls} onClick={() => {
             if (document.hidden) return;
             started.current = true;
             setRun({ ...run, phase: "trial", trial: 0 });
             taskRef.current?.focus();
           }}>
-            Start round {run.block + 1}
+            Start round {run.block + 1} →
           </button>
         </> : <>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" className="min-h-16 rounded-xl bg-indigo-100 px-2 touch-manipulation"
-              onClick={(e) => respond(false, e.detail === 0 ? "keyboard" : "pointer")}>Everything else <kbd>(E)</kbd></button>
-            <button type="button" className="min-h-16 rounded-xl bg-indigo-100 px-2 touch-manipulation"
-              onClick={(e) => respond(true, e.detail === 0 ? "keyboard" : "pointer")}>{config[block.target].label} or {config.focalAttribute.label} <kbd>(I)</kbd></button>
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" className={sortButtonCls}
+              onClick={(e) => respond(false, e.detail === 0 ? "keyboard" : "pointer")}>
+              Everything else <kbd className={kbdCls}>E</kbd>
+            </button>
+            <button type="button" className={sortButtonCls}
+              onClick={(e) => respond(true, e.detail === 0 ? "keyboard" : "pointer")}>
+              {config[block.target].label} or {config.focalAttribute.label} <kbd className={kbdCls}>I</kbd>
+            </button>
           </div>
-          <div className="min-h-24 flex flex-col items-center justify-center break-all text-center" aria-live="polite">
+          <div className="min-h-[6rem] flex flex-col items-center justify-center break-all text-center" aria-live="polite">
             {ready && trial && <strong className="text-2xl">{config[trial.category].stimuli[trial.stimulus]}</strong>}
-            {wrong && <p className="text-red-700">Try the other answer.</p>}
+            {wrong && <p className="text-red-700 font-medium">Try the other answer.</p>}
           </div>
         </>}
       </>}
       {run.phase === "submit" && (
         busy ? <p role="status">Saving your completed test…</p> : (
-          <button type="button" className="btn-add" onClick={() => void submit(run.attempt)}>
+          <button type="button" className={primaryActionCls} onClick={() => void submit(run.attempt)}>
             Retry saving your test
           </button>
         )

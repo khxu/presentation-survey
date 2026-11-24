@@ -20,6 +20,137 @@ function text(node: ReactTestInstance | string): string {
   return typeof node === "string" ? node : node.children.map(text).join("");
 }
 
+test("Brief IAT start, round, trial, and retry buttons use self-contained Tailwind button styling", async () => {
+  const q = { ...newQuestion("brief_iat"), required: true, released: true };
+  ok(q.biat);
+  const originalApi = { ...api };
+  const originalGlobals = {
+    document: globalThis.document,
+    window: globalThis.window,
+    requestAnimationFrame: globalThis.requestAnimationFrame,
+    cancelAnimationFrame: globalThis.cancelAnimationFrame,
+  };
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      writable: true,
+      value: {
+        hidden: false,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: {
+        setTimeout: (fn: () => void) => {
+          fn();
+          return 1;
+        },
+        clearTimeout: () => {},
+      },
+    });
+    Object.defineProperty(globalThis, "requestAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: (fn: FrameRequestCallback) => {
+        fn(0);
+        return 1;
+      },
+    });
+    Object.defineProperty(globalThis, "cancelAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: () => {},
+    });
+
+    api.biatSchedule = async () => ({
+      version: 1,
+      blocks: [
+        { target: "targetA", trials: [{ category: "targetA", stimulus: 0 }] },
+        { target: "targetB", trials: [{ category: "targetB", stimulus: 0 }] },
+      ],
+    });
+    api.submitBiat = async () => {
+      throw new Error("Network unavailable");
+    };
+
+    await act(() => {
+      renderer = create(
+        <BiatInput slug="s" questionId={q.id} config={q.biat!} onComplete={() => {}} />,
+      );
+    });
+    const root = renderer!.root;
+    const assertPrimaryButton = (label: string) => {
+      const btn = root.findAllByType("button").find((b) => text(b).includes(label));
+      ok(btn, `Missing button: ${label}`);
+      const cls = String(btn.props.className ?? "");
+      ok(!cls.includes("btn-add"), `${label} must not depend on Admin-only btn-add`);
+      ok(cls.includes("bg-indigo-600"), `${label} should have solid indigo fill`);
+      ok(cls.includes("border-2"), `${label} should have an explicit border`);
+      ok(cls.includes("rounded-xl"), `${label} should have rounded corners`);
+      return btn;
+    };
+
+    const startBtn = assertPrimaryButton("Start Brief IAT");
+    await act(async () => {
+      await startBtn.props.onClick();
+    });
+
+    const round1Btn = assertPrimaryButton("Start round 1");
+    await act(async () => {
+      round1Btn.props.onClick();
+    });
+
+    const trialButtons = root.findAllByType("button");
+    equal(trialButtons.length, 2);
+    for (const btn of trialButtons) {
+      const cls = String(btn.props.className ?? "");
+      ok(cls.includes("border-2"), "Trial sort buttons should have explicit borders");
+      ok(cls.includes("min-h-["), "Trial sort buttons should use Twind-safe arbitrary min-height");
+      ok(!cls.includes("min-h-16"), "Trial sort buttons must not rely on unsupported min-h-16");
+    }
+
+    // Complete round 1, start and complete round 2, then verify submit retry button
+    await act(async () => {
+      trialButtons[1].props.onClick({ detail: 1 });
+    });
+    const round2Btn = assertPrimaryButton("Start round 2");
+    await act(async () => {
+      round2Btn.props.onClick();
+    });
+    await act(async () => {
+      root.findAllByType("button")[1].props.onClick({ detail: 1 });
+    });
+    assertPrimaryButton("Retry saving your test");
+  } finally {
+    if (renderer) await act(() => renderer!.unmount());
+    Object.assign(api, originalApi);
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      writable: true,
+      value: originalGlobals.document,
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: originalGlobals.window,
+    });
+    Object.defineProperty(globalThis, "requestAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: originalGlobals.requestAnimationFrame,
+    });
+    Object.defineProperty(globalThis, "cancelAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: originalGlobals.cancelAnimationFrame,
+    });
+  }
+});
+
 test("returning respondents can continue past a required completed Brief IAT without submitting again", async () => {
   const q = { ...newQuestion("brief_iat"), required: true, released: true };
   const survey: Survey = {
